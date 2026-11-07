@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+dist-ssr/
+.vite/
+*.local
+
+# Tauri / Rust build artifacts
+src-tauri/target/
+src-tauri/WixTools/
+**/*.rs.bk
+
+# OS metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# LaTeX temporary and intermediate compilation artifacts
+*.aux
+*.log
+*.out
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.fmt
+*.bbl
+*.blg
+*.toc
+*.nav
+*.snm
+*.vrb
+*.bcf
+*.run.xml
+
+# Secrets and environment variables
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+
+# Test & coverage
+coverage/
+*.lcov
