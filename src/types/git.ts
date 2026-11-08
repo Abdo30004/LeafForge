@@ -46,3 +46,18 @@ export interface PollTokenResponse {
   errorDescription?: string;
   interval?: number;
 }
+
+export interface PullResult {
+  success: boolean;
+  upToDate: boolean;
+  fastForward: boolean;
+  message: string;
+  newHead?: string | null;
+}
+
+export interface ReconcileResult {
+  clean: boolean;
+  mergedText: string;
+  hasConflicts: boolean;
+  conflictCount: number;
+}
