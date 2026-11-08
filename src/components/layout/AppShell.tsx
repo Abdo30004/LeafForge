@@ -1,11 +1,11 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { TopHeaderBar } from './TopHeaderBar';
 import { ActivityRail } from './ActivityRail';
 import { SidebarPanel } from './SidebarPanel';
 import { StatusBar } from './StatusBar';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { useCompilerStore } from '../../store/useCompilerStore';
-import { writeFileText, onFsChange } from '../../services/tauriClient';
+import { writeFileText, onFsChange, revealInExplorer, openExternalPath } from '../../services/tauriClient';
 import { LatexEditor } from '../../editor/LatexEditor';
 import { PdfViewport } from '../pdf/PdfViewport';
 import { BuildLogDrawer } from '../diagnostics/BuildLogDrawer';
@@ -18,7 +18,20 @@ import { ImagePreview } from '../preview/ImagePreview';
 import { PdfDocumentPreview } from '../preview/PdfDocumentPreview';
 import { UnsupportedFilePreview } from '../preview/UnsupportedFilePreview';
 import { getFileCategory } from '../../utils/fileCategory';
-import { X, FileCode, FileText, BookOpen, Image as ImageIcon, FileQuestion } from 'lucide-react';
+import {
+  X,
+  FileCode,
+  FileText,
+  BookOpen,
+  Image as ImageIcon,
+  FileQuestion,
+  Copy,
+  ExternalLink,
+  FolderOpen,
+  ArrowRight,
+} from 'lucide-react';
+import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
+import { copyToClipboard } from '../../utils/clipboard';
 
 export const AppShell: React.FC = () => {
   const activeFilePath = useWorkspaceStore((s) => s.activeFilePath);
@@ -26,14 +39,37 @@ export const AppShell: React.FC = () => {
   const fileContents = useWorkspaceStore((s) => s.fileContents);
   const dirtyFiles = useWorkspaceStore((s) => s.dirtyFiles);
   const pdfPanelWidth = useWorkspaceStore((s) => s.pdfPanelWidth);
+  const workspacePath = useWorkspaceStore((s) => s.workspacePath);
   const runCompile = useCompilerStore((s) => s.runCompile);
 
   const setActiveFile = useWorkspaceStore((s) => s.setActiveFile);
   const closeFile = useWorkspaceStore((s) => s.closeFile);
+  const closeOtherFiles = useWorkspaceStore((s) => s.closeOtherFiles);
+  const closeFilesToRight = useWorkspaceStore((s) => s.closeFilesToRight);
+  const closeAllFiles = useWorkspaceStore((s) => s.closeAllFiles);
   const markFileSaved = useWorkspaceStore((s) => s.markFileSaved);
   const setPdfPanelWidth = useWorkspaceStore((s) => s.setPdfPanelWidth);
 
   const isResizingPdfRef = useRef(false);
+  const [tabContextMenu, setTabContextMenu] = useState<{
+    x: number;
+    y: number;
+    filePath?: string;
+  } | null>(null);
+
+  // Global suppression of default browser/webview context menu across desktop app
+  useEffect(() => {
+    const handleGlobalContextMenu = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return;
+      }
+      e.preventDefault();
+    };
+
+    window.addEventListener('contextmenu', handleGlobalContextMenu);
+    return () => window.removeEventListener('contextmenu', handleGlobalContextMenu);
+  }, []);
 
   // Background file watcher integration: auto-compile on changes to TeX/bib/cls/sty
   useEffect(() => {
@@ -90,10 +126,10 @@ export const AppShell: React.FC = () => {
     };
   }, [setPdfPanelWidth]);
 
-  // Global Save shortcut (Cmd/Ctrl + S) & Auto-Compile
+  // Global Save shortcut (Cmd/Ctrl + S) & Close Tab (Cmd/Ctrl + W)
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
         if (activeFilePath) {
           const content = fileContents[activeFilePath] ?? '';
@@ -108,16 +144,107 @@ export const AppShell: React.FC = () => {
             });
           }
         }
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'w') {
+        e.preventDefault();
+        if (activeFilePath) {
+          closeFile(activeFilePath);
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeFilePath, fileContents, markFileSaved, runCompile]);
+  }, [activeFilePath, fileContents, markFileSaved, runCompile, closeFile]);
 
   const getFileName = (path: string): string => {
     const norm = path.replace(/\\/g, '/');
     return norm.split('/').pop() ?? path;
+  };
+
+  const getTabContextMenuItems = (): ContextMenuItem[] => {
+    if (!tabContextMenu) return [];
+
+    if (!tabContextMenu.filePath) {
+      return [
+        {
+          label: 'Close All Tabs',
+          icon: X,
+          disabled: openFiles.length === 0,
+          action: () => closeAllFiles(),
+        },
+        ...(workspacePath
+          ? [
+              { divider: true },
+              {
+                label: 'Reveal Workspace in File Explorer',
+                icon: FolderOpen,
+                action: () => revealInExplorer(workspacePath),
+              },
+            ]
+          : []),
+      ];
+    }
+
+    const { filePath } = tabContextMenu;
+    const fileName = getFileName(filePath);
+    const relPath = workspacePath
+      ? filePath.replace(/\\/g, '/').replace(workspacePath.replace(/\\/g, '/').replace(/\/+$/, '') + '/', '')
+      : filePath;
+    const isOnlyTab = openFiles.length <= 1;
+    const isLastTab = openFiles.indexOf(filePath) === openFiles.length - 1;
+
+    return [
+      {
+        label: 'Close Tab',
+        icon: X,
+        shortcut: 'Ctrl+W',
+        action: () => closeFile(filePath),
+      },
+      {
+        label: 'Close Others',
+        icon: X,
+        disabled: isOnlyTab,
+        action: () => closeOtherFiles(filePath),
+      },
+      {
+        label: 'Close Tabs to the Right',
+        icon: ArrowRight,
+        disabled: isLastTab,
+        action: () => closeFilesToRight(filePath),
+      },
+      {
+        label: 'Close All Tabs',
+        icon: X,
+        action: () => closeAllFiles(),
+      },
+      { divider: true },
+      {
+        label: 'Copy File Name',
+        icon: Copy,
+        action: () => copyToClipboard(fileName),
+      },
+      {
+        label: 'Copy Relative Path',
+        icon: Copy,
+        action: () => copyToClipboard(relPath),
+      },
+      {
+        label: 'Copy Absolute Path',
+        icon: Copy,
+        action: () => copyToClipboard(filePath),
+      },
+      { divider: true },
+      {
+        label: 'Open in Default App',
+        icon: ExternalLink,
+        action: () => openExternalPath(filePath),
+      },
+      {
+        label: 'Reveal in File Explorer',
+        icon: FolderOpen,
+        action: () => revealInExplorer(filePath),
+      },
+    ];
   };
 
   const getTabIcon = (path: string) => {
@@ -148,7 +275,16 @@ export const AppShell: React.FC = () => {
         {/* Zone 3: Center Editor Zone */}
         <div className="flex-1 flex flex-col min-w-0 bg-[var(--surface-editor)] overflow-hidden">
           {/* Open Tabs Header */}
-          <div className="h-[34px] border-b border-[var(--border-subtle)] bg-[var(--surface-elevated)] flex items-center overflow-x-auto select-none shrink-0 px-1">
+          <div
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setTabContextMenu({
+                x: e.clientX,
+                y: e.clientY,
+              });
+            }}
+            className="h-[34px] border-b border-[var(--border-subtle)] bg-[var(--surface-elevated)] flex items-center overflow-x-auto select-none shrink-0 px-1"
+          >
             {openFiles.length === 0 ? (
               <span className="text-xs text-[var(--text-muted)] italic px-2">No open documents</span>
             ) : (
@@ -161,6 +297,15 @@ export const AppShell: React.FC = () => {
                   <div
                     key={filePath}
                     onClick={() => setActiveFile(filePath)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setTabContextMenu({
+                        x: e.clientX,
+                        y: e.clientY,
+                        filePath,
+                      });
+                    }}
                     className={`group flex items-center space-x-1.5 px-3 py-1 text-xs cursor-pointer border-r border-[var(--border-subtle)] transition-colors h-full ${
                       isActive
                         ? 'bg-[var(--surface-editor)] text-[var(--text-primary)] font-medium border-t-2 border-t-accent-primary'
@@ -249,6 +394,16 @@ export const AppShell: React.FC = () => {
 
       {/* Cmd/Ctrl+K Global Command Palette */}
       <CommandPalette />
+
+      {/* Tab Context Menu */}
+      {tabContextMenu && (
+        <ContextMenu
+          x={tabContextMenu.x}
+          y={tabContextMenu.y}
+          items={getTabContextMenuItems()}
+          onClose={() => setTabContextMenu(null)}
+        />
+      )}
     </div>
   );
 };

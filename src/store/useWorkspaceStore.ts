@@ -30,6 +30,9 @@ export interface WorkspaceState {
   setFiles: (files: FileEntry[]) => void;
   openFile: (path: string, content?: string) => void;
   closeFile: (path: string) => void;
+  closeOtherFiles: (path: string) => void;
+  closeFilesToRight: (path: string) => void;
+  closeAllFiles: () => void;
   setActiveFile: (path: string) => void;
   updateFileContent: (path: string, content: string) => void;
   markFileSaved: (path: string) => void;
@@ -97,6 +100,31 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
         activeFilePath = openFiles[openFiles.length - 1] ?? null;
       }
       return { openFiles, activeFilePath };
+    }),
+
+  closeOtherFiles: (path) =>
+    set((state) => {
+      const openFiles = state.openFiles.includes(path) ? [path] : [];
+      const activeFilePath = openFiles.length > 0 ? path : null;
+      return { openFiles, activeFilePath };
+    }),
+
+  closeFilesToRight: (path) =>
+    set((state) => {
+      const idx = state.openFiles.indexOf(path);
+      if (idx === -1) return {};
+      const openFiles = state.openFiles.slice(0, idx + 1);
+      const activeFilePath =
+        state.activeFilePath && openFiles.includes(state.activeFilePath)
+          ? state.activeFilePath
+          : path;
+      return { openFiles, activeFilePath };
+    }),
+
+  closeAllFiles: () =>
+    set({
+      openFiles: [],
+      activeFilePath: null,
     }),
 
   setActiveFile: (path) => set({ activeFilePath: path }),

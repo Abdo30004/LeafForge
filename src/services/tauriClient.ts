@@ -72,6 +72,43 @@ export async function deletePath(path: string): Promise<void> {
   return invoke<void>('delete_path', { path });
 }
 
+export async function duplicateFile(sourcePath: string): Promise<string> {
+  if (!isTauriEnvironment()) {
+    return `${sourcePath}_copy`;
+  }
+  return invoke<string>('duplicate_file', { sourcePath });
+}
+
+export async function revealInExplorer(targetPath: string): Promise<void> {
+  if (!isTauriEnvironment()) return;
+  try {
+    const { revealItemInDir, openPath } = await import('@tauri-apps/plugin-opener');
+    if (typeof revealItemInDir === 'function') {
+      await revealItemInDir(targetPath);
+      return;
+    }
+    const parentDir = targetPath.replace(/[/\\][^/\\]+$/, '');
+    await openPath(parentDir);
+  } catch {
+    try {
+      const { openPath } = await import('@tauri-apps/plugin-opener');
+      await openPath(targetPath);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+export async function openExternalPath(targetPath: string): Promise<void> {
+  if (!isTauriEnvironment()) return;
+  try {
+    const { openPath } = await import('@tauri-apps/plugin-opener');
+    await openPath(targetPath);
+  } catch {
+    // ignore
+  }
+}
+
 export async function importBinaryAsset(targetDir: string, sourcePath: string): Promise<string> {
   return invoke<string>('import_binary_asset', { targetDir, sourcePath });
 }

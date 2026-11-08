@@ -12,8 +12,8 @@ use commands::compiler_cmds::{
 };
 use commands::font_cmds::{list_font_families, list_system_fonts};
 use commands::fs_cmds::{
-    create_dir, create_file, delete_path, import_binary_asset, list_files, open_folder,
-    read_file_binary, read_file_text, rename_path, unwatch_directory, watch_directory,
+    create_dir, create_file, delete_path, duplicate_file, import_binary_asset, list_files,
+    open_folder, read_file_binary, read_file_text, rename_path, unwatch_directory, watch_directory,
     write_file_text,
 };
 use commands::git_cmds::{
@@ -45,6 +45,7 @@ pub fn run() {
             create_dir,
             rename_path,
             delete_path,
+            duplicate_file,
             import_binary_asset,
             watch_directory,
             unwatch_directory,

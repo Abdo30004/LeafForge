@@ -286,6 +286,63 @@ pub async fn import_binary_asset(target_dir: String, source_path: String) -> Res
     Ok(dest.to_string_lossy().to_string())
 }
 
+async fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
+    tokio::fs::create_dir_all(dst).await?;
+    let mut entries = tokio::fs::read_dir(src).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        let entry_path = entry.path();
+        let target = dst.join(entry.file_name());
+        if entry_path.is_dir() {
+            Box::pin(copy_dir_recursive(&entry_path, &target)).await?;
+        } else {
+            tokio::fs::copy(&entry_path, &target).await?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn duplicate_file(source_path: String) -> Result<String> {
+    let src = PathBuf::from(&source_path);
+    if !src.exists() {
+        return Err(AppError::NotFound(source_path));
+    }
+
+    let parent = src.parent().ok_or_else(|| {
+        AppError::InvalidPath(format!(
+            "Cannot determine parent directory for {source_path}"
+        ))
+    })?;
+
+    let is_dir = src.is_dir();
+    let stem = src
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "copy".into());
+    let ext = if is_dir {
+        String::new()
+    } else {
+        src.extension()
+            .map(|e| format!(".{}", e.to_string_lossy()))
+            .unwrap_or_default()
+    };
+
+    let mut candidate = parent.join(format!("{stem}_copy{ext}"));
+    let mut counter = 1;
+    while candidate.exists() {
+        counter += 1;
+        candidate = parent.join(format!("{stem}_copy_{counter}{ext}"));
+    }
+
+    if is_dir {
+        copy_dir_recursive(&src, &candidate).await?;
+    } else {
+        tokio::fs::copy(&src, &candidate).await?;
+    }
+
+    Ok(candidate.to_string_lossy().to_string())
+}
+
 #[tauri::command]
 pub async fn watch_directory(
     dir_path: String,
@@ -383,5 +440,35 @@ mod tests {
 
         assert!(Path::new(&imported).exists());
         assert!(imported.ends_with("sample.png"));
+    }
+
+    #[tokio::test]
+    async fn test_duplicate_file_and_dir() {
+        let dir = tempdir().expect("tempdir");
+        let file_path = dir.path().join("doc.tex");
+        std::fs::write(&file_path, b"content").expect("write");
+
+        let dup = duplicate_file(file_path.to_string_lossy().to_string())
+            .await
+            .expect("duplicate file");
+        assert!(Path::new(&dup).exists());
+        assert!(dup.ends_with("doc_copy.tex"));
+
+        let dup2 = duplicate_file(file_path.to_string_lossy().to_string())
+            .await
+            .expect("duplicate file again");
+        assert!(Path::new(&dup2).exists());
+        assert!(dup2.ends_with("doc_copy_2.tex"));
+
+        let sub_dir = dir.path().join("figures");
+        std::fs::create_dir_all(&sub_dir).expect("create dir");
+        std::fs::write(sub_dir.join("a.png"), b"image").expect("write image");
+
+        let dup_dir = duplicate_file(sub_dir.to_string_lossy().to_string())
+            .await
+            .expect("duplicate dir");
+        assert!(Path::new(&dup_dir).exists());
+        assert!(dup_dir.ends_with("figures_copy"));
+        assert!(Path::new(&dup_dir).join("a.png").exists());
     }
 }

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { EditorState, type Extension } from '@codemirror/state';
 import {
   EditorView,
@@ -26,6 +26,9 @@ import { visualModeExtensions, setVisualModeEffect } from './extensions/visualMo
 import { synctexClick } from './extensions/synctexClick';
 import { inlineDiagnostics, setDiagnosticsEffect } from './extensions/inlineDiagnostics';
 import { lspClient } from './extensions/lspClient';
+import { ContextMenu, type ContextMenuItem } from '../components/common/ContextMenu';
+import { copyToClipboard } from '../utils/clipboard';
+import { Scissors, Copy, Clipboard, FileText, Languages, CheckSquare } from 'lucide-react';
 
 export interface LatexEditorProps {
   className?: string;
@@ -49,6 +52,8 @@ export const LatexEditor: React.FC<LatexEditorProps> = ({ className }) => {
   const diagnostics = useCompilerStore((s) => s.diagnostics);
   const collabStatus = useCollabStore((s) => s.status);
   const canWrite = useCollabStore((s) => s.canWrite);
+
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   const content = activeFilePath ? (fileContents[activeFilePath] ?? '') : '';
 
@@ -244,11 +249,129 @@ export const LatexEditor: React.FC<LatexEditorProps> = ({ className }) => {
     view.dispatch({});
   }, [theme]);
 
+  const getContextMenuItems = (): ContextMenuItem[] => {
+    const view = viewRef.current;
+    if (!view) return [];
+
+    const hasSelection = !view.state.selection.main.empty;
+
+    return [
+      {
+        label: 'Cut',
+        icon: Scissors,
+        shortcut: 'Ctrl+X',
+        disabled: !hasSelection || !canWrite,
+        action: async () => {
+          const selectedText = view.state.sliceDoc(
+            view.state.selection.main.from,
+            view.state.selection.main.to
+          );
+          await copyToClipboard(selectedText);
+          view.dispatch({
+            changes: {
+              from: view.state.selection.main.from,
+              to: view.state.selection.main.to,
+              insert: '',
+            },
+          });
+          view.focus();
+        },
+      },
+      {
+        label: 'Copy',
+        icon: Copy,
+        shortcut: 'Ctrl+C',
+        disabled: !hasSelection,
+        action: async () => {
+          const selectedText = view.state.sliceDoc(
+            view.state.selection.main.from,
+            view.state.selection.main.to
+          );
+          await copyToClipboard(selectedText);
+        },
+      },
+      {
+        label: 'Paste',
+        icon: Clipboard,
+        shortcut: 'Ctrl+V',
+        disabled: !canWrite,
+        action: async () => {
+          try {
+            const text = await navigator.clipboard.readText();
+            view.dispatch({
+              changes: {
+                from: view.state.selection.main.from,
+                to: view.state.selection.main.to,
+                insert: text,
+              },
+            });
+            view.focus();
+          } catch {
+            // ignore
+          }
+        },
+      },
+      { divider: true },
+      {
+        label: 'Jump to PDF (SyncTeX)',
+        icon: FileText,
+        shortcut: 'Ctrl+Click',
+        action: () => {
+          const pos = view.state.selection.main.head;
+          const line = view.state.doc.lineAt(pos);
+          const detail = {
+            filePath: activeFilePath ?? undefined,
+            line: line.number,
+            column: pos - line.from + 1,
+          };
+          window.dispatchEvent(new CustomEvent('leafforge:synctex-forward', { detail }));
+        },
+      },
+      {
+        label: 'Toggle Text Direction (RTL/LTR)',
+        icon: Languages,
+        shortcut: 'Ctrl+Alt+R',
+        action: () => {
+          toggleLineDirection(view);
+          view.focus();
+        },
+      },
+      { divider: true },
+      {
+        label: 'Select All',
+        icon: CheckSquare,
+        shortcut: 'Ctrl+A',
+        action: () => {
+          view.dispatch({
+            selection: { anchor: 0, head: view.state.doc.length },
+          });
+          view.focus();
+        },
+      },
+    ];
+  };
+
   return (
     <div
       ref={containerRef}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        setContextMenu({
+          x: e.clientX,
+          y: e.clientY,
+        });
+      }}
       className={`relative w-full h-full overflow-hidden ${className ?? ''}`}
       data-testid="codemirror-latex-editor"
-    />
+    >
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={getContextMenuItems()}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+    </div>
   );
 };

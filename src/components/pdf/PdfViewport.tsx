@@ -12,14 +12,16 @@ import {
   FileText,
   Download,
   Eye,
+  FolderOpen,
 } from 'lucide-react';
 import { useCompilerStore } from '../../store/useCompilerStore';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
-import { readFileBinary, synctexForward, synctexInverse } from '../../services/tauriClient';
+import { readFileBinary, synctexForward, synctexInverse, revealInExplorer } from '../../services/tauriClient';
 import { SyncTexOverlay } from './SyncTexOverlay';
 import { formatErrorDetails } from '../../utils/formatError';
 import { logger } from '../../services/logger';
 import type { SyncTexCoordinate } from '../../types/latex';
+import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 
 // Set up PDF.js worker
 if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
@@ -51,6 +53,12 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
   const [pageHeight, setPageHeight] = useState<number>(792);
   const [isRendering, setIsRendering] = useState<boolean>(false);
   const [syncCoordinate, setSyncCoordinate] = useState<SyncTexCoordinate | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    clickX: number;
+    clickY: number;
+  } | null>(null);
 
   const pdfPath = useCompilerStore((s) => s.pdfPath);
   const compilerStatus = useCompilerStore((s) => s.status);
@@ -307,22 +315,18 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
     };
   }, [workspacePath, rootTexFile, currentPage, numPages, scale]);
 
-  // Handle Inverse SyncTeX (Cmd/Ctrl+Click inside PDF canvas)
-  const handleCanvasClick = async (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!event.metaKey && !event.ctrlKey) {
-      return;
-    }
+  // Handle Inverse SyncTeX (Cmd/Ctrl+Click inside PDF canvas or Context Menu)
+  const triggerInverseSync = async (clientX: number, clientY: number) => {
+    const canvas = activeBuffer === 'A' ? canvasARef.current : canvasBRef.current;
+    if (!canvas || !workspacePath) return;
 
-    const canvas = event.currentTarget;
     const rect = canvas.getBoundingClientRect();
-    const clickX = event.clientX - rect.left;
-    const clickY = event.clientY - rect.top;
+    const clickX = clientX - rect.left;
+    const clickY = clientY - rect.top;
 
     // Convert from screen px to PDF pt (72 dpi)
     const xPt = clickX / scale;
     const yPt = clickY / scale;
-
-    if (!workspacePath) return;
 
     try {
       const result = await synctexInverse(workspacePath, rootTexFile, currentPage, xPt, yPt);
@@ -338,6 +342,77 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
         yPt,
       });
     }
+  };
+
+  const handleCanvasClick = async (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!event.metaKey && !event.ctrlKey) {
+      return;
+    }
+    triggerInverseSync(event.clientX, event.clientY);
+  };
+
+  const getContextMenuItems = (): ContextMenuItem[] => {
+    if (!contextMenu) return [];
+
+    return [
+      {
+        label: 'Jump to LaTeX Source',
+        icon: FileText,
+        shortcut: 'Ctrl+Click',
+        action: () => triggerInverseSync(contextMenu.clickX, contextMenu.clickY),
+      },
+      { divider: true },
+      {
+        label: 'Zoom In',
+        icon: ZoomIn,
+        action: handleZoomIn,
+      },
+      {
+        label: 'Zoom Out',
+        icon: ZoomOut,
+        action: handleZoomOut,
+      },
+      {
+        label: 'Reset Zoom (100%)',
+        action: () => setScale(1.0),
+      },
+      {
+        label: 'Fit to Width',
+        icon: Maximize2,
+        action: handleFitWidth,
+      },
+      {
+        label: 'Fit to Page',
+        icon: Minimize2,
+        action: handleFitPage,
+      },
+      { divider: true },
+      {
+        label: 'Recompile TeX',
+        icon: RefreshCw,
+        shortcut: 'Ctrl+B',
+        action: () => runCompile(),
+      },
+      ...(pdfPath
+        ? [
+            {
+              label: 'Download PDF',
+              icon: Download,
+              action: () => handleDownloadPdf(),
+            },
+            {
+              label: 'Open in System Viewer',
+              icon: ExternalLink,
+              action: () => handleOpenExternal(),
+            },
+            {
+              label: 'Reveal PDF in File Explorer',
+              icon: FolderOpen,
+              action: () => revealInExplorer(pdfPath),
+            },
+          ]
+        : []),
+    ];
   };
 
   // Zoom helpers
@@ -516,6 +591,15 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
       {/* Main PDF Scroll Canvas Container */}
       <div
         ref={containerRef}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            clickX: e.clientX,
+            clickY: e.clientY,
+          });
+        }}
         className="flex-1 overflow-auto p-4 flex justify-center items-start bg-[#181a1f]/80 relative"
       >
         <div
@@ -561,6 +645,16 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
           <span>{rootTexFile.replace(/\.tex$/, '.pdf')}</span>
         </div>
       </div>
+
+      {/* PDF Viewport Context Menu */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={getContextMenuItems()}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 };

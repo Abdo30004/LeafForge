@@ -20,6 +20,9 @@ import {
   Eye,
   EyeOff,
   FileQuestion,
+  Copy,
+  Files,
+  ExternalLink,
 } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import type { FileEntry } from '../../types/ipc';
@@ -32,12 +35,27 @@ import {
   createDir,
   renamePath,
   deletePath,
+  duplicateFile,
+  revealInExplorer,
+  openExternalPath,
   importBinaryAsset,
   onFsChange,
   watchDirectory,
 } from '../../services/tauriClient';
 import { formatErrorMessage, formatErrorDetails } from '../../utils/formatError';
 import { logger } from '../../services/logger';
+import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
+import { copyToClipboard } from '../../utils/clipboard';
+
+const getRelativePath = (fullPath: string, rootDir?: string | null): string => {
+  if (!rootDir) return fullPath;
+  const normRoot = rootDir.replace(/\\/g, '/').replace(/\/+$/, '');
+  const normPath = fullPath.replace(/\\/g, '/');
+  if (normPath.startsWith(normRoot + '/')) {
+    return normPath.slice(normRoot.length + 1);
+  }
+  return normPath;
+};
 
 export const FileTreePanel: React.FC = () => {
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
@@ -60,6 +78,12 @@ export const FileTreePanel: React.FC = () => {
   const [modalInput, setModalInput] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showHidden, setShowHidden] = useState<boolean>(false);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    entry?: FileEntry;
+    isRoot?: boolean;
+  } | null>(null);
 
   const refreshTree = useCallback(async () => {
     if (!workspacePath) return;
@@ -251,13 +275,36 @@ export const FileTreePanel: React.FC = () => {
     }
   };
 
-  const handleImportAsset = async () => {
+  const handleDuplicate = async (sourcePath: string) => {
+    setErrorMsg(null);
+    try {
+      const newPath = await duplicateFile(sourcePath);
+      logger.info('FileSystem', `Duplicated: ${sourcePath} -> ${newPath}`);
+      await refreshTree();
+    } catch (err) {
+      const msg = formatErrorMessage(err, `Failed to duplicate file`);
+      logger.error('FileSystem', 'Failed to duplicate file', {
+        error: formatErrorDetails(err),
+        sourcePath,
+      });
+      setErrorMsg(msg);
+    }
+  };
+
+  const handleCopy = async (text: string, description = 'Copied to clipboard') => {
+    const ok = await copyToClipboard(text);
+    if (ok) {
+      logger.info('Clipboard', `${description}: ${text}`);
+    }
+  };
+
+  const handleImportAsset = async (targetDirectory?: string) => {
     if (!workspacePath) return;
     const source = prompt('Enter absolute path of image/asset to import (.png, .pdf, .eps):');
     if (!source || !source.trim()) return;
     setErrorMsg(null);
     try {
-      const destDir = `${workspacePath.replace(/\\/g, '/')}/figures`;
+      const destDir = targetDirectory ?? `${workspacePath.replace(/\\/g, '/')}/figures`;
       await importBinaryAsset(destDir, source.trim());
       logger.info('FileSystem', `Imported asset from ${source.trim()} into ${destDir}`);
       await refreshTree();
@@ -269,6 +316,243 @@ export const FileTreePanel: React.FC = () => {
       });
       setErrorMsg(msg);
     }
+  };
+
+  const getContextMenuItems = (): ContextMenuItem[] => {
+    if (!contextMenu) return [];
+
+    if (contextMenu.isRoot || !contextMenu.entry) {
+      return [
+        {
+          label: 'New LaTeX File',
+          icon: FilePlus,
+          action: () => {
+            setModalState({ type: 'createFile' });
+            setModalInput('');
+          },
+        },
+        {
+          label: 'New Directory',
+          icon: FolderPlus,
+          action: () => {
+            setModalState({ type: 'createDir' });
+            setModalInput('');
+          },
+        },
+        {
+          label: 'Import Figure Asset...',
+          icon: ImagePlus,
+          action: () => handleImportAsset(),
+        },
+        { divider: true },
+        {
+          label: 'Refresh Files',
+          icon: RefreshCw,
+          action: () => refreshTree(),
+        },
+        {
+          label: showHidden ? 'Hide Build Artifacts' : 'Show Build Artifacts',
+          icon: showHidden ? EyeOff : Eye,
+          action: () => setShowHidden((prev) => !prev),
+        },
+        ...(workspacePath
+          ? [
+              { divider: true },
+              {
+                label: 'Copy Workspace Path',
+                icon: Copy,
+                action: () => handleCopy(workspacePath, 'Copied workspace path'),
+              },
+              {
+                label: 'Reveal in File Explorer',
+                icon: FolderOpenIcon,
+                action: () => revealInExplorer(workspacePath),
+              },
+            ]
+          : []),
+      ];
+    }
+
+    const { entry } = contextMenu;
+    const isTex = !entry.isDirectory && entry.name.endsWith('.tex');
+    const isImage = !entry.isDirectory && getFileCategory(entry.name) === 'image';
+    const isBib = !entry.isDirectory && entry.name.endsWith('.bib');
+    const isRoot = rootTexFile === entry.path;
+    const relPath = getRelativePath(entry.path, workspacePath);
+
+    if (entry.isDirectory) {
+      return [
+        {
+          label: 'New File Here...',
+          icon: FilePlus,
+          action: () => {
+            setModalState({ type: 'createFile', targetPath: entry.path });
+            setModalInput('');
+          },
+        },
+        {
+          label: 'New Subdirectory...',
+          icon: FolderPlus,
+          action: () => {
+            setModalState({ type: 'createDir', targetPath: entry.path });
+            setModalInput('');
+          },
+        },
+        {
+          label: 'Import Figure Here...',
+          icon: ImagePlus,
+          action: () => handleImportAsset(entry.path),
+        },
+        { divider: true },
+        {
+          label: 'Copy Relative Path',
+          icon: Copy,
+          action: () => handleCopy(relPath, 'Copied relative path'),
+        },
+        {
+          label: 'Copy Absolute Path',
+          icon: Copy,
+          action: () => handleCopy(entry.path, 'Copied absolute path'),
+        },
+        { divider: true },
+        {
+          label: 'Rename Folder',
+          icon: Edit2,
+          shortcut: 'F2',
+          action: () => {
+            setModalState({
+              type: 'rename',
+              targetPath: entry.path,
+              defaultValue: entry.name,
+            });
+            setModalInput(entry.name);
+          },
+        },
+        {
+          label: 'Duplicate Folder',
+          icon: Files,
+          action: () => handleDuplicate(entry.path),
+        },
+        {
+          label: 'Delete Folder',
+          icon: Trash2,
+          shortcut: 'Del',
+          danger: true,
+          action: () => handleDelete(entry.path),
+        },
+        { divider: true },
+        {
+          label: 'Open Folder in Default App',
+          icon: ExternalLink,
+          action: () => openExternalPath(entry.path),
+        },
+        {
+          label: 'Reveal in File Explorer',
+          icon: FolderOpenIcon,
+          action: () => revealInExplorer(entry.path),
+        },
+      ];
+    }
+
+    // Single File entries
+    const items: ContextMenuItem[] = [
+      {
+        label: 'Open',
+        icon: FileText,
+        action: () => handleFileClick(entry),
+      },
+    ];
+
+    if (isTex && !isRoot) {
+      items.push({
+        label: 'Set as Root TeX Document',
+        icon: Star,
+        action: () => setRootTexFile(entry.path),
+      });
+    }
+
+    if (isTex) {
+      items.push({
+        label: 'Copy \\input{...} Macro',
+        icon: FileCode,
+        action: () => {
+          const macro = `\\input{${relPath.replace(/\.tex$/i, '')}}`;
+          handleCopy(macro, 'Copied LaTeX input macro');
+        },
+      });
+    } else if (isImage) {
+      items.push({
+        label: 'Copy \\includegraphics Macro',
+        icon: ImageIcon,
+        action: () => {
+          const figName = entry.name.replace(/\.[^/.]+$/, '');
+          const snippet = `\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\linewidth]{${relPath}}\n  \\caption{${figName}}\n  \\label{fig:${figName.toLowerCase().replace(/[^a-z0-9]/g, '_')}}\n\\end{figure}`;
+          handleCopy(snippet, 'Copied figure environment');
+        },
+      });
+    } else if (isBib) {
+      items.push({
+        label: 'Copy \\addbibresource Macro',
+        icon: BookOpen,
+        action: () => {
+          const snippet = `\\addbibresource{${relPath}}`;
+          handleCopy(snippet, 'Copied bib macro');
+        },
+      });
+    }
+
+    items.push(
+      { divider: true },
+      {
+        label: 'Copy Relative Path',
+        icon: Copy,
+        action: () => handleCopy(relPath, 'Copied relative path'),
+      },
+      {
+        label: 'Copy Absolute Path',
+        icon: Copy,
+        action: () => handleCopy(entry.path, 'Copied absolute path'),
+      },
+      { divider: true },
+      {
+        label: 'Rename',
+        icon: Edit2,
+        shortcut: 'F2',
+        action: () => {
+          setModalState({
+            type: 'rename',
+            targetPath: entry.path,
+            defaultValue: entry.name,
+          });
+          setModalInput(entry.name);
+        },
+      },
+      {
+        label: 'Duplicate File',
+        icon: Files,
+        action: () => handleDuplicate(entry.path),
+      },
+      {
+        label: 'Delete File',
+        icon: Trash2,
+        shortcut: 'Del',
+        danger: true,
+        action: () => handleDelete(entry.path),
+      },
+      { divider: true },
+      {
+        label: 'Open in Default App',
+        icon: ExternalLink,
+        action: () => openExternalPath(entry.path),
+      },
+      {
+        label: 'Reveal in File Explorer',
+        icon: FolderOpenIcon,
+        action: () => revealInExplorer(entry.path),
+      }
+    );
+
+    return items;
   };
 
   const getFileIcon = (fileName: string) => {
@@ -300,6 +584,15 @@ export const FileTreePanel: React.FC = () => {
       <div key={entry.path} className={`flex flex-col select-none ${isArtifact ? 'opacity-60' : ''}`}>
         <div
           onClick={() => handleFileClick(entry)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setContextMenu({
+              x: e.clientX,
+              y: e.clientY,
+              entry,
+            });
+          }}
           style={{ paddingLeft: `${depth * 12 + 8}px` }}
           className={`group flex items-center justify-between py-1 pr-2 text-xs cursor-pointer transition-colors ${
             isActive
@@ -431,7 +724,7 @@ export const FileTreePanel: React.FC = () => {
               <FolderPlus className="w-3.5 h-3.5" />
             </button>
             <button
-              onClick={handleImportAsset}
+              onClick={() => handleImportAsset()}
               className="p-1 rounded hover:bg-[var(--hover-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
               title="Import Figure Asset"
             >
@@ -481,7 +774,19 @@ export const FileTreePanel: React.FC = () => {
       )}
 
       {/* Main File List or Empty State */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden py-1">
+      <div
+        className="flex-1 overflow-y-auto overflow-x-hidden py-1"
+        onContextMenu={(e) => {
+          if (workspacePath) {
+            e.preventDefault();
+            setContextMenu({
+              x: e.clientX,
+              y: e.clientY,
+              isRoot: true,
+            });
+          }
+        }}
+      >
         {!workspacePath ? (
           <div className="flex flex-col items-center justify-center h-full px-4 text-center space-y-3">
             <Folder className="w-10 h-10 text-[var(--text-muted)] stroke-1" />
@@ -554,6 +859,16 @@ export const FileTreePanel: React.FC = () => {
             </div>
           </form>
         </div>
+      )}
+
+      {/* Desktop Context Menu */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={getContextMenuItems()}
+          onClose={() => setContextMenu(null)}
+        />
       )}
     </div>
   );
