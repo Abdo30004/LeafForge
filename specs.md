@@ -405,7 +405,7 @@ Execute the build strictly in the 6 phases below. At the end of every step, run 
 ### Phase 6: LSP Integration (`TexLab`), Command Palette & End-to-End Verification
 - [x] **Step 6.1:** Implement `lsp_supervisor.rs` and `lspClient.ts` to bridge `texlab` over JSON-RPC for instant `\cite{...}` BibTeX autocomplete, `\ref{...}` label lookup, and macro hover documentation.
   - *Commit:* `feat(lsp): bridge texlab language server for bibtex citation and macro completion`
-- [ ] **Step 6.2:** Build `CommandPalette.tsx` (`Cmd/Ctrl+K`) exposing all editor, compiler, Git, RTL, and collaboration actions, plus comprehensive unit and integration tests for log parsing, SyncTeX coordinate mapping, BiDi tokenization, and 3-way CRDT-Git merging.
+- [x] **Step 6.2:** Build `CommandPalette.tsx` (`Cmd/Ctrl+K`) exposing all editor, compiler, Git, RTL, and collaboration actions, plus comprehensive unit and integration tests for log parsing, SyncTeX coordinate mapping, BiDi tokenization, and 3-way CRDT-Git merging.
   - *Commit:* `test(suite): add command palette and comprehensive unit tests for core engines`
 
 ---
@@ -414,10 +414,10 @@ Execute the build strictly in the 6 phases below. At the end of every step, run 
 
 Before marking the project complete, verify and check off every criterion below:
 
-- [ ] **Git Hygiene:** `git log --oneline` shows clean, atomic Conventional Commits across all 6 phases with zero uncommitted or untracked build artifacts.
-- [ ] **Rust Compilation & Linting:** `cargo check` and `cargo clippy -- -D warnings` pass with $0$ errors and $0$ warnings.
-- [ ] **Frontend Typecheck & Build:** `pnpm run typecheck` and `pnpm run build` complete cleanly with zero TypeScript or bundler errors.
-- [ ] **Dual-Mode Editor Fidelity:** Switching between **Raw Source** and **Visual Mode** renders inline/display math via KaTeX, section headers, and tables without altering a single byte of the underlying `.tex` document unless edited.
-- [ ] **RTL & BiDi Stability:** Typing mixed Arabic/Hebrew sentences containing `\cite{knuth1984}` and `$\alpha + \beta = \gamma$` maintains right-to-left paragraph flow while keeping the LaTeX command and math expression strictly left-to-right.
+- [x] **Git Hygiene:** `git log --oneline` shows clean, atomic Conventional Commits across all 6 phases with zero uncommitted or untracked build artifacts.
+- [x] **Rust Compilation & Linting:** `cargo check` and `cargo clippy -- -D warnings` pass with $0$ errors and $0$ warnings.
+- [x] **Frontend Typecheck & Build:** `pnpm run typecheck` and `pnpm run build` complete cleanly with zero TypeScript or bundler errors.
+- [x] **Dual-Mode Editor Fidelity:** Switching between **Raw Source** and **Visual Mode** renders inline/display math via KaTeX, section headers, and tables without altering a single byte of the underlying `.tex` document unless edited.
+- [x] **RTL & BiDi Stability:** Typing mixed Arabic/Hebrew sentences containing `\cite{knuth1984}` and `$\alpha + \beta = \gamma$` maintains right-to-left paragraph flow while keeping the LaTeX command and math expression strictly left-to-right.
 - [x] **Auto-Compile & Flicker-Free PDF:** Saving or pausing typing for $400\text{ ms}$ triggers background compilation (`Tectonic`, `LuaLaTeX`, `XeLaTeX`, or `pdfLaTeX`), updates the PDF canvas via double-buffering with zero white flash, and supports two-way `Cmd/Ctrl+Click` SyncTeX jumping.
 - [x] **GitHub Device Auth & Git Sync:** User can authenticate via the 8-character GitHub Device Code, clone a repository, stage/commit/push changes via native `git2`, and reconcile external Git commits with live Yjs CRDT sessions without data loss.
