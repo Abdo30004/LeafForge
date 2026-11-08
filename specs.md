@@ -365,7 +365,7 @@ Execute the build strictly in the 6 phases below. At the end of every step, run 
   - *Commit:* `chore(init): scaffold tauri v2, react 19, typescript, and tailwind workspace`
 - [x] **Step 1.2:** Implement `AppError` (`error.rs`), `AppState` (`state.rs`), and filesystem commands (`fs_cmds.rs`) supporting opening a local folder, recursive directory tree listing, reading/writing UTF-8 files atomically, creating/renaming/deleting files, and importing binary figure assets (`.png`, `.pdf`, `.eps`).
   - *Commit:* `feat(fs): implement async workspace file manager and atomic disk operations`
-- [ ] **Step 1.3:** Implement debounced file watcher (`watcher.rs`) using `notify` ($\Delta t = 400\text{ ms}$) that emits `workspace://fs-change` events to the frontend.
+- [x] **Step 1.3:** Implement debounced file watcher (`watcher.rs`) using `notify` ($\Delta t = 400\text{ ms}$) that emits `workspace://fs-change` events to the frontend.
   - *Commit:* `feat(watcher): add 400ms debounced filesystem watcher for external changes`
 - [ ] **Step 1.4:** Build `AppShell.tsx`, `ActivityRail.tsx`, `SidebarPanel.tsx`, `FileTreePanel.tsx`, `TopHeaderBar.tsx`, `StatusBar.tsx`, and theme switcher (Dark/Light).
   - *Commit:* `feat(ui): build 4-zone academic studio shell, file tree, and theme engine`

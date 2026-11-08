@@ -1,10 +1,11 @@
 pub mod commands;
 pub mod error;
+pub mod services;
 pub mod state;
 
 use commands::fs_cmds::{
     create_dir, create_file, delete_path, import_binary_asset, list_files, open_folder,
-    read_file_text, rename_path, write_file_text,
+    read_file_text, rename_path, unwatch_directory, watch_directory, write_file_text,
 };
 use state::AppState;
 
@@ -23,6 +24,8 @@ pub fn run() {
             rename_path,
             delete_path,
             import_binary_asset,
+            watch_directory,
+            unwatch_directory,
         ])
         .run(tauri::generate_context!())
         .expect("error while running leafforge application");

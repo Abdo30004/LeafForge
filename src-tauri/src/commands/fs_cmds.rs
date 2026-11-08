@@ -3,7 +3,7 @@ use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -267,6 +267,34 @@ pub async fn import_binary_asset(target_dir: String, source_path: String) -> Res
 
     tokio::fs::copy(&src, &dest).await?;
     Ok(dest.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub async fn watch_directory(
+    dir_path: String,
+    state: State<'_, AppState>,
+    app_handle: AppHandle,
+) -> Result<()> {
+    let path = PathBuf::from(&dir_path);
+    if !path.exists() || !path.is_dir() {
+        return Err(AppError::NotFound(dir_path));
+    }
+
+    let watcher = crate::services::watcher::start_workspace_watcher(path, app_handle)?;
+
+    if let Ok(mut lock) = state.watcher_handle.lock() {
+        *lock = Some(watcher);
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn unwatch_directory(state: State<'_, AppState>) -> Result<()> {
+    if let Ok(mut lock) = state.watcher_handle.lock() {
+        *lock = None;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
