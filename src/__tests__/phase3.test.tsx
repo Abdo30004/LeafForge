@@ -185,6 +185,7 @@ describe('Phase 3 Multi-Engine Compiler & SyncTeX Telemetry', () => {
     const html = renderToString(<PdfViewport />);
     expect(html).toContain('pdf-viewport');
     expect(html).toContain('PDF Preview');
+    expect(html).toContain('No Preview available');
     expect(html).toContain('Cmd/Ctrl+Click canvas to jump to LaTeX source');
   });
 });

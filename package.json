@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:run": "vitest run",
     "build:local": "powershell -ExecutionPolicy Bypass -File ./output/build.ps1",
+    "changelog": "node scripts/extract-changelog.cjs",
     "tauri": "tauri"
   },
   "dependencies": {

@@ -65,6 +65,7 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
   const runCompile = useCompilerStore((s) => s.runCompile);
   const compileNonce = useCompilerStore((s) => s.compileNonce);
   const [downloading, setDownloading] = useState<boolean>(false);
+  const [hasValidPdf, setHasValidPdf] = useState<boolean>(false);
 
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
   const rootTexFile = useWorkspaceStore((s) => s.rootTexFile) || 'main.tex';
@@ -137,76 +138,6 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
     []
   );
 
-  // Render mock fallback canvas if no PDF available
-  const renderMockPdf = useCallback(
-    (targetBuffer: 'A' | 'B', zoomScale: number) => {
-      const canvas = targetBuffer === 'A' ? canvasARef.current : canvasBRef.current;
-      if (!canvas) return;
-
-      const baseW = 595;
-      const baseH = 842;
-      const w = baseW * zoomScale;
-      const h = baseH * zoomScale;
-
-      setPageWidth(w);
-      setPageHeight(h);
-
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = w * dpr;
-      canvas.height = h * dpr;
-      canvas.style.width = `${w}px`;
-      canvas.style.height = `${h}px`;
-
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-      // White paper page background
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, w, h);
-
-      // Subtle drop shadow / paper boundary
-      ctx.strokeStyle = '#e2e8f0';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(0, 0, w, h);
-
-      // Mock PDF title & typography
-      ctx.fillStyle = '#0f172a';
-      ctx.font = `bold ${Math.round(18 * zoomScale)}px serif`;
-      ctx.fillText('LeafForge — Autonomous LaTeX Document', 50 * zoomScale, 80 * zoomScale);
-
-      ctx.fillStyle = '#475569';
-      ctx.font = `${Math.round(10 * zoomScale)}px serif`;
-      ctx.fillText(
-        `Generated with ${useCompilerStore.getState().engine} • Ready for forward & inverse SyncTeX`,
-        50 * zoomScale,
-        105 * zoomScale
-      );
-
-      // Decorative text lines mimicking paper
-      ctx.fillStyle = '#334155';
-      ctx.font = `${Math.round(11 * zoomScale)}px serif`;
-      const paragraphs = [
-        '1. Introduction and Architecture Overview',
-        'LeafForge provides a production-grade local-first desktop IDE for academic and scientific writing.',
-        'With embedded Tectonic compilation and native SyncTeX indexing, bidirectional cursor mapping is instantaneous.',
-        'Mathematical precision is guaranteed through sub-second incremental preamble caches.',
-      ];
-
-      let yPos = 150 * zoomScale;
-      for (const line of paragraphs) {
-        ctx.fillText(line, 50 * zoomScale, yPos);
-        yPos += 24 * zoomScale;
-      }
-
-      requestAnimationFrame(() => {
-        setActiveBuffer(targetBuffer);
-      });
-    },
-    []
-  );
-
   // Load PDF file when pdfPath changes or recompile completes
   useEffect(() => {
     let cancelled = false;
@@ -215,7 +146,7 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
       const nextBuffer = activeBuffer === 'A' ? 'B' : 'A';
 
       if (!pdfPath) {
-        renderMockPdf(nextBuffer, scale);
+        setHasValidPdf(false);
         return;
       }
 
@@ -256,12 +187,15 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
         setCurrentPage(validPage);
 
         await renderPageIntoBuffer(doc, validPage, nextBuffer, scale);
+        if (!cancelled) {
+          setHasValidPdf(true);
+        }
       } catch (e) {
-        logger.debug('PDF', 'PDF.js fallback to mock canvas render', {
+        logger.debug('PDF', 'PDF loading failed or document unavailable', {
           error: formatErrorDetails(e),
         });
         if (!cancelled) {
-          renderMockPdf(nextBuffer, scale);
+          setHasValidPdf(false);
         }
       }
     }
@@ -490,18 +424,18 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
           </span>
           <button
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            disabled={currentPage <= 1}
+            disabled={!hasValidPdf || currentPage <= 1}
             className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)] disabled:opacity-30"
             title="Previous Page"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <span className="font-mono text-[11px] text-[var(--text-primary)]">
-            {currentPage} / {numPages}
+            {hasValidPdf ? `${currentPage} / ${numPages}` : '- / -'}
           </span>
           <button
             onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
-            disabled={currentPage >= numPages}
+            disabled={!hasValidPdf || currentPage >= numPages}
             className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)] disabled:opacity-30"
             title="Next Page"
           >
@@ -600,38 +534,50 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
             clickY: e.clientY,
           });
         }}
-        className="flex-1 overflow-auto p-4 flex justify-center items-start bg-[#181a1f]/80 relative"
+        className="flex-1 overflow-auto p-4 flex justify-center items-center bg-[#181a1f]/80 relative"
       >
-        <div
-          className="relative shadow-2xl bg-white border border-black/20 rounded transition-transform"
-          style={{ width: `${pageWidth}px`, height: `${pageHeight}px` }}
-        >
-          {/* Buffer A Canvas */}
-          <canvas
-            ref={canvasARef}
-            onClick={handleCanvasClick}
-            className={`absolute top-0 left-0 transition-opacity duration-150 cursor-crosshair ${
-              activeBuffer === 'A' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
-            }`}
-          />
+        {!pdfPath || !hasValidPdf ? (
+          <div className="flex flex-col items-center justify-center text-center p-8 select-none my-auto">
+            <div className="w-12 h-12 rounded-full bg-[var(--surface-editor)] border border-[var(--border-subtle)] flex items-center justify-center mb-3 text-[var(--text-muted)]">
+              <FileText className="w-6 h-6 opacity-60" />
+            </div>
+            <p className="text-sm font-semibold text-[var(--text-primary)]">No Preview available</p>
+            <p className="text-xs text-[var(--text-muted)] mt-1.5 max-w-[260px]">
+              Compile your document to generate and preview the rendered PDF output.
+            </p>
+          </div>
+        ) : (
+          <div
+            className="relative shadow-2xl bg-white border border-black/20 rounded transition-transform my-auto"
+            style={{ width: `${pageWidth}px`, height: `${pageHeight}px` }}
+          >
+            {/* Buffer A Canvas */}
+            <canvas
+              ref={canvasARef}
+              onClick={handleCanvasClick}
+              className={`absolute top-0 left-0 transition-opacity duration-150 cursor-crosshair ${
+                activeBuffer === 'A' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+              }`}
+            />
 
-          {/* Buffer B Canvas (Double-buffer) */}
-          <canvas
-            ref={canvasBRef}
-            onClick={handleCanvasClick}
-            className={`absolute top-0 left-0 transition-opacity duration-150 cursor-crosshair ${
-              activeBuffer === 'B' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
-            }`}
-          />
+            {/* Buffer B Canvas (Double-buffer) */}
+            <canvas
+              ref={canvasBRef}
+              onClick={handleCanvasClick}
+              className={`absolute top-0 left-0 transition-opacity duration-150 cursor-crosshair ${
+                activeBuffer === 'B' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+              }`}
+            />
 
-          {/* SyncTeX Amber Highlight Pulse Overlay */}
-          <SyncTexOverlay
-            coordinate={syncCoordinate}
-            scale={scale}
-            pageWidth={pageWidth}
-            pageHeight={pageHeight}
-          />
-        </div>
+            {/* SyncTeX Amber Highlight Pulse Overlay */}
+            <SyncTexOverlay
+              coordinate={syncCoordinate}
+              scale={scale}
+              pageWidth={pageWidth}
+              pageHeight={pageHeight}
+            />
+          </div>
+        )}
       </div>
 
       {/* Subtle Hint Bar */}
