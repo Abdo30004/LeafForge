@@ -47,9 +47,40 @@ pub struct CollaboratorPermission {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GithubRepoSummary {
+    pub id: u64,
+    pub name: String,
+    pub full_name: String,
+    pub private: bool,
+    pub html_url: String,
+    pub clone_url: String,
+    pub default_branch: Option<String>,
+    pub description: Option<String>,
+    pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AuthStatusResponse {
     pub authenticated: bool,
     pub profile: Option<GithubUserProfile>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawRepoResponse {
+    id: u64,
+    name: String,
+    full_name: String,
+    #[serde(default)]
+    private: bool,
+    html_url: String,
+    clone_url: String,
+    #[serde(default)]
+    default_branch: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    updated_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -109,6 +140,54 @@ impl GithubAuthService {
         base.join(".auth_token")
     }
 
+    fn get_fallback_profile_path() -> PathBuf {
+        let base = if cfg!(windows) {
+            std::env::var("LOCALAPPDATA")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| std::env::temp_dir())
+                .join("LeafForge")
+        } else if let Ok(home) = std::env::var("HOME") {
+            PathBuf::from(home)
+                .join(".local")
+                .join("share")
+                .join("LeafForge")
+        } else {
+            std::env::temp_dir().join("LeafForge")
+        };
+        let _ = std::fs::create_dir_all(&base);
+        base.join("profile.json")
+    }
+
+    /// Save cached user profile
+    pub fn save_profile(profile: &GithubUserProfile) -> Result<()> {
+        let path = Self::get_fallback_profile_path();
+        if let Ok(json) = serde_json::to_string_pretty(profile) {
+            let _ = std::fs::write(&path, json);
+        }
+        Ok(())
+    }
+
+    /// Retrieve cached user profile
+    pub fn get_cached_profile() -> Result<Option<GithubUserProfile>> {
+        let path = Self::get_fallback_profile_path();
+        if path.exists()
+            && let Ok(content) = std::fs::read_to_string(&path)
+            && let Ok(profile) = serde_json::from_str::<GithubUserProfile>(&content)
+        {
+            return Ok(Some(profile));
+        }
+        Ok(None)
+    }
+
+    /// Delete cached user profile
+    pub fn delete_profile() -> Result<()> {
+        let path = Self::get_fallback_profile_path();
+        if path.exists() {
+            let _ = std::fs::remove_file(path);
+        }
+        Ok(())
+    }
+
     /// Save OAuth access token in native OS keychain and protected local fallback
     pub fn save_token(token: &str) -> Result<()> {
         let trimmed = token.trim();
@@ -138,6 +217,11 @@ impl GithubAuthService {
         {
             let trimmed = pw.trim().to_string();
             if !trimmed.is_empty() {
+                // Ensure fallback file is kept in sync
+                let path = Self::get_fallback_token_path();
+                if !path.exists() {
+                    let _ = std::fs::write(&path, &trimmed);
+                }
                 return Ok(Some(trimmed));
             }
         }
@@ -147,6 +231,10 @@ impl GithubAuthService {
         if let Ok(saved) = std::fs::read_to_string(&path) {
             let trimmed = saved.trim().to_string();
             if !trimmed.is_empty() {
+                // Restore into keyring if missing
+                if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER) {
+                    let _ = entry.set_password(&trimmed);
+                }
                 return Ok(Some(trimmed));
             }
         }
@@ -163,6 +251,7 @@ impl GithubAuthService {
         if path.exists() {
             let _ = std::fs::remove_file(path);
         }
+        let _ = Self::delete_profile();
         Ok(())
     }
 
@@ -240,7 +329,10 @@ impl GithubAuthService {
 
             // Automatically pre-fetch user profile with the authenticated token
             let profile = match Self::fetch_profile(&token).await {
-                Ok(p) => Some(p),
+                Ok(p) => {
+                    let _ = Self::save_profile(&p);
+                    Some(p)
+                }
                 Err(err) => {
                     eprintln!("Note: Could not immediately fetch profile: {err}");
                     None
@@ -425,6 +517,117 @@ impl GithubAuthService {
             can_read,
         })
     }
+
+    /// List repositories owned or collaborated by authenticated user
+    pub async fn list_user_repos(token: &str) -> Result<Vec<GithubRepoSummary>> {
+        let client = reqwest::Client::builder()
+            .build()
+            .map_err(|e| AppError::Auth(format!("Failed to build HTTP client: {e}")))?;
+
+        let response = client
+            .get("https://api.github.com/user/repos?sort=updated&per_page=100&affiliation=owner,collaborator")
+            .header(AUTHORIZATION, format!("Bearer {token}"))
+            .header(USER_AGENT, "LeafForge-Desktop")
+            .header(ACCEPT, "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .send()
+            .await
+            .map_err(|e| AppError::Auth(format!("Failed to query GitHub repositories: {e}")))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(AppError::Auth(format!(
+                "GitHub repository list failed with status {status}: {body}"
+            )));
+        }
+
+        let raw: Vec<RawRepoResponse> = response
+            .json()
+            .await
+            .map_err(|e| AppError::Auth(format!("Failed to parse GitHub repository list: {e}")))?;
+
+        let repos = raw
+            .into_iter()
+            .map(|r| GithubRepoSummary {
+                id: r.id,
+                name: r.name,
+                full_name: r.full_name,
+                private: r.private,
+                html_url: r.html_url,
+                clone_url: r.clone_url,
+                default_branch: r.default_branch,
+                description: r.description,
+                updated_at: r.updated_at,
+            })
+            .collect();
+
+        Ok(repos)
+    }
+
+    /// Create a new GitHub repository for authenticated user
+    pub async fn create_user_repo(
+        token: &str,
+        name: &str,
+        description: Option<&str>,
+        private: bool,
+    ) -> Result<GithubRepoSummary> {
+        let client = reqwest::Client::builder()
+            .build()
+            .map_err(|e| AppError::Auth(format!("Failed to build HTTP client: {e}")))?;
+
+        #[derive(Serialize)]
+        struct CreateRepoRequest<'a> {
+            name: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            description: Option<&'a str>,
+            private: bool,
+            auto_init: bool,
+        }
+
+        let payload = CreateRepoRequest {
+            name,
+            description,
+            private,
+            auto_init: false,
+        };
+
+        let response = client
+            .post("https://api.github.com/user/repos")
+            .header(AUTHORIZATION, format!("Bearer {token}"))
+            .header(USER_AGENT, "LeafForge-Desktop")
+            .header(ACCEPT, "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| AppError::Auth(format!("Failed to create GitHub repository: {e}")))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(AppError::Auth(format!(
+                "GitHub repository creation failed with status {status}: {body}"
+            )));
+        }
+
+        let r: RawRepoResponse = response
+            .json()
+            .await
+            .map_err(|e| AppError::Auth(format!("Failed to parse created GitHub repository: {e}")))?;
+
+        Ok(GithubRepoSummary {
+            id: r.id,
+            name: r.name,
+            full_name: r.full_name,
+            private: r.private,
+            html_url: r.html_url,
+            clone_url: r.clone_url,
+            default_branch: r.default_branch,
+            description: r.description,
+            updated_at: r.updated_at,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -476,6 +679,10 @@ mod tests {
 
     #[test]
     fn test_token_save_and_retrieve_roundtrip() {
+        // Backup existing token and profile so the unit test does not destroy active user session
+        let backup_token = GithubAuthService::get_token().ok().flatten();
+        let backup_profile = GithubAuthService::get_cached_profile().ok().flatten();
+
         let test_token = "gho_test_mock_token_123456789";
         GithubAuthService::save_token(test_token).unwrap();
         let loaded = GithubAuthService::get_token().unwrap();
@@ -483,6 +690,14 @@ mod tests {
         GithubAuthService::delete_token().unwrap();
         let after_delete = GithubAuthService::get_token().unwrap();
         assert_eq!(after_delete, None);
+
+        // Restore original credentials if any existed
+        if let Some(ref t) = backup_token {
+            let _ = GithubAuthService::save_token(t);
+        }
+        if let Some(ref p) = backup_profile {
+            let _ = GithubAuthService::save_profile(p);
+        }
     }
 
     #[test]

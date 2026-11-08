@@ -4,8 +4,9 @@ pub mod services;
 pub mod state;
 
 use commands::auth_cmds::{
-    get_github_auth_status, get_github_user_profile, get_or_create_room_key, logout_github,
-    poll_github_device_token, start_github_device_flow, verify_repo_collaborator,
+    create_github_repo, get_github_auth_status, get_github_user_profile, get_or_create_room_key,
+    list_github_user_repos, logout_github, poll_github_device_token, start_github_device_flow,
+    verify_repo_collaborator,
 };
 use commands::compiler_cmds::{
     abort_compilation, clean_aux_files, compile_document, detect_engines, parse_magic_comments,
@@ -18,8 +19,8 @@ use commands::fs_cmds::{
 };
 use commands::git_cmds::{
     git_checkout_branch, git_clone, git_commit, git_diff, git_get_remote_url, git_init,
-    git_list_branches, git_pull, git_push, git_reconcile_3way, git_stage, git_stage_all,
-    git_status, git_unstage, git_unstage_all,
+    git_is_repo, git_list_branches, git_pull, git_push, git_reconcile_3way, git_set_remote,
+    git_stage, git_stage_all, git_status, git_unstage, git_unstage_all,
 };
 use commands::log_cmds::{
     clear_app_logs, get_log_file_path, get_recent_logs, open_log_file, write_log_entry,
@@ -70,8 +71,11 @@ pub fn run() {
             get_github_auth_status,
             get_github_user_profile,
             logout_github,
+            list_github_user_repos,
+            create_github_repo,
             verify_repo_collaborator,
             get_or_create_room_key,
+            git_is_repo,
             git_init,
             git_status,
             git_diff,
@@ -87,6 +91,7 @@ pub fn run() {
             git_checkout_branch,
             git_reconcile_3way,
             git_get_remote_url,
+            git_set_remote,
             write_log_entry,
             get_recent_logs,
             get_log_file_path,

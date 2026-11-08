@@ -5,6 +5,16 @@ use std::path::PathBuf;
 use tauri::State;
 
 #[tauri::command]
+pub async fn git_is_repo(project_dir: String) -> Result<bool> {
+    tokio::task::spawn_blocking(move || {
+        let path = PathBuf::from(&project_dir);
+        Ok(GitEngine::is_repo(&path))
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Spawn blocking failed: {e}")))?
+}
+
+#[tauri::command]
 pub async fn git_init(project_dir: String) -> Result<()> {
     tokio::task::spawn_blocking(move || {
         let path = PathBuf::from(&project_dir);
@@ -259,6 +269,20 @@ pub async fn git_get_remote_url(
     tokio::task::spawn_blocking(move || {
         let path = PathBuf::from(&project_dir);
         GitEngine::get_remote_url(&path, remote_name.as_deref())
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Spawn blocking failed: {e}")))?
+}
+
+#[tauri::command]
+pub async fn git_set_remote(
+    project_dir: String,
+    url: String,
+    remote_name: Option<String>,
+) -> Result<()> {
+    tokio::task::spawn_blocking(move || {
+        let path = PathBuf::from(&project_dir);
+        GitEngine::set_remote(&path, remote_name.as_deref(), &url)
     })
     .await
     .map_err(|e| AppError::Internal(format!("Spawn blocking failed: {e}")))?

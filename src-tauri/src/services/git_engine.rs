@@ -18,6 +18,7 @@ pub struct GitFileStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GitRepoStatus {
+    pub is_repo: bool,
     pub branch: String,
     pub is_clean: bool,
     pub ahead: usize,
@@ -48,10 +49,33 @@ pub struct ReconcileResult {
 pub struct GitEngine;
 
 impl GitEngine {
+    /// Checks whether the exact folder is an initialized Git repository
+    pub fn is_repo(path: &Path) -> bool {
+        Repository::open(path).is_ok()
+    }
+
     /// Open an existing Git repository
     pub fn open(path: &Path) -> Result<Repository> {
         Repository::discover(path)
             .map_err(|e| AppError::Git(format!("Failed to open git repository: {e}")))
+    }
+
+    /// Sets or updates a remote URL on the repository (initializing if needed)
+    pub fn set_remote(path: &Path, remote_name: Option<&str>, url: &str) -> Result<()> {
+        let repo = if Self::is_repo(path) {
+            Self::open(path)?
+        } else {
+            Self::init(path)?
+        };
+        let r_name = remote_name.unwrap_or("origin");
+        if repo.find_remote(r_name).is_ok() {
+            repo.remote_set_url(r_name, url)
+                .map_err(|e| AppError::Git(format!("Failed to set remote url: {e}")))?;
+        } else {
+            repo.remote(r_name, url)
+                .map_err(|e| AppError::Git(format!("Failed to add remote: {e}")))?;
+        }
+        Ok(())
     }
 
     /// Initialize a new Git repository with main branch
@@ -95,6 +119,18 @@ impl GitEngine {
 
     /// Get current working tree and index status
     pub fn get_status(path: &Path) -> Result<GitRepoStatus> {
+        if !Self::is_repo(path) {
+            return Ok(GitRepoStatus {
+                is_repo: false,
+                branch: "main".into(),
+                is_clean: true,
+                ahead: 0,
+                behind: 0,
+                staged: vec![],
+                unstaged: vec![],
+            });
+        }
+
         let repo = Self::open(path)?;
 
         let branch = match repo.head() {
@@ -197,6 +233,7 @@ impl GitEngine {
         let is_clean = staged.is_empty() && unstaged.is_empty();
 
         Ok(GitRepoStatus {
+            is_repo: true,
             branch,
             is_clean,
             ahead,
@@ -773,6 +810,40 @@ mod tests {
             .unwrap();
         let url = GitEngine::get_remote_url(&tmp, None).unwrap();
         assert_eq!(url.as_deref(), Some("https://github.com/alice/paper.git"));
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_git_is_repo_and_set_remote() {
+        let tmp = std::env::temp_dir().join(format!(
+            "lf_is_repo_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        // Initially not a repo
+        assert!(!GitEngine::is_repo(&tmp));
+        let status = GitEngine::get_status(&tmp).unwrap();
+        assert!(!status.is_repo);
+
+        // set_remote should auto-init and set origin
+        GitEngine::set_remote(&tmp, None, "https://github.com/bob/research.git").unwrap();
+        assert!(GitEngine::is_repo(&tmp));
+
+        let status_after = GitEngine::get_status(&tmp).unwrap();
+        assert!(status_after.is_repo);
+
+        let url = GitEngine::get_remote_url(&tmp, None).unwrap();
+        assert_eq!(url.as_deref(), Some("https://github.com/bob/research.git"));
+
+        // Update remote url
+        GitEngine::set_remote(&tmp, None, "https://github.com/bob/new-url.git").unwrap();
+        let updated_url = GitEngine::get_remote_url(&tmp, None).unwrap();
+        assert_eq!(updated_url.as_deref(), Some("https://github.com/bob/new-url.git"));
+
         let _ = std::fs::remove_dir_all(&tmp);
     }
 }

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { GitFileStatus, GithubUserProfile } from '../types/git';
 
 export interface GitState {
+  isRepo: boolean;
   branch: string;
   isClean: boolean;
   ahead: number;
@@ -10,7 +11,9 @@ export interface GitState {
   unstaged: GitFileStatus[];
   userProfile: GithubUserProfile | null;
   deviceModalOpen: boolean;
+  connectModalOpen: boolean;
 
+  setIsRepo: (isRepo: boolean) => void;
   setBranch: (branch: string) => void;
   setGitStatus: (
     branch: string,
@@ -18,10 +21,12 @@ export interface GitState {
     ahead: number,
     behind: number,
     staged: GitFileStatus[],
-    unstaged: GitFileStatus[]
+    unstaged: GitFileStatus[],
+    isRepo?: boolean
   ) => void;
   setUserProfile: (profile: GithubUserProfile | null) => void;
   setDeviceModalOpen: (open: boolean) => void;
+  setConnectModalOpen: (open: boolean) => void;
 }
 
 const SAVED_PROFILE_KEY = 'leafforge:github-user-profile';
@@ -37,6 +42,7 @@ const loadSavedProfile = (): GithubUserProfile | null => {
 };
 
 export const useGitStore = create<GitState>((set) => ({
+  isRepo: false,
   branch: 'main',
   isClean: true,
   ahead: 0,
@@ -45,10 +51,20 @@ export const useGitStore = create<GitState>((set) => ({
   unstaged: [],
   userProfile: loadSavedProfile(),
   deviceModalOpen: false,
+  connectModalOpen: false,
 
+  setIsRepo: (isRepo) => set({ isRepo }),
   setBranch: (branch) => set({ branch }),
-  setGitStatus: (branch, isClean, ahead, behind, staged, unstaged) =>
-    set({ branch, isClean, ahead, behind, staged, unstaged }),
+  setGitStatus: (branch, isClean, ahead, behind, staged, unstaged, isRepo) =>
+    set((state) => ({
+      branch,
+      isClean,
+      ahead,
+      behind,
+      staged,
+      unstaged,
+      isRepo: isRepo !== undefined ? isRepo : state.isRepo,
+    })),
   setUserProfile: (userProfile) => {
     try {
       if (typeof window !== 'undefined') {
@@ -64,4 +80,5 @@ export const useGitStore = create<GitState>((set) => ({
     set({ userProfile });
   },
   setDeviceModalOpen: (deviceModalOpen) => set({ deviceModalOpen }),
+  setConnectModalOpen: (connectModalOpen) => set({ connectModalOpen }),
 }));

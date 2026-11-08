@@ -106,9 +106,11 @@ export const TopHeaderBar: React.FC<TopHeaderBarProps> = ({
   useEffect(() => {
     getGithubAuthStatus()
       .then((status) => {
-        if (status.authenticated && status.profile) {
-          setUserProfile(status.profile);
-        } else if (!status.authenticated) {
+        if (status.authenticated) {
+          if (status.profile) {
+            setUserProfile(status.profile);
+          }
+        } else {
           // If token was revoked or deleted from OS keychain
           setUserProfile(null);
         }

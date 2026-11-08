@@ -10,6 +10,10 @@ import {
   gitListBranches,
   gitCheckoutBranch,
   gitReconcile3Way,
+  gitIsRepo,
+  gitSetRemote,
+  listGithubUserRepos,
+  createGithubRepo,
 } from '../services/tauriClient';
 
 describe('Git Control & Reconciliation Test Suite', () => {
@@ -79,5 +83,36 @@ describe('Git Control & Reconciliation Test Suite', () => {
     expect(result.hasConflicts).toBe(true);
     expect(result.mergedText).toContain('<<<<<<< LIVE SESSION (CRDT)');
     expect(result.mergedText).toContain('>>>>>>> INCOMING GIT COMMIT');
+  });
+
+  it('checks if directory is a git repository and sets remote url', async () => {
+    const isR = await gitIsRepo('/mock/workspace');
+    expect(isR).toBe(true);
+
+    await expect(
+      gitSetRemote('/mock/workspace', 'https://github.com/alice/paper.git', 'origin')
+    ).resolves.toBeUndefined();
+  });
+
+  it('fetches user github repositories and supports creating new repo', async () => {
+    const repos = await listGithubUserRepos();
+    expect(repos.length).toBeGreaterThan(0);
+    expect(repos[0].fullName).toBe('octocat/latex-paper');
+
+    const created = await createGithubRepo('new-project', true, 'Test description');
+    expect(created.name).toBe('new-project');
+    expect(created.private).toBe(true);
+    expect(created.cloneUrl).toBe('https://github.com/octocat/new-project.git');
+  });
+
+  it('manages isRepo and connectModalOpen states in useGitStore', () => {
+    const store = useGitStore.getState();
+    expect(store.connectModalOpen).toBe(false);
+
+    store.setConnectModalOpen(true);
+    expect(useGitStore.getState().connectModalOpen).toBe(true);
+
+    store.setIsRepo(true);
+    expect(useGitStore.getState().isRepo).toBe(true);
   });
 });

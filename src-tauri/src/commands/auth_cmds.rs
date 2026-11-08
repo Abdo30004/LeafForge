@@ -1,7 +1,7 @@
 use crate::error::{AppError, Result};
 use crate::services::github_auth::{
     AuthStatusResponse, CollaboratorPermission, DEFAULT_CLIENT_ID, DeviceCodeResponse,
-    GithubAuthService, GithubUserProfile, PollTokenResponse,
+    GithubAuthService, GithubRepoSummary, GithubUserProfile, PollTokenResponse,
 };
 use crate::state::AppState;
 use std::path::PathBuf;
@@ -72,16 +72,30 @@ pub async fn get_github_auth_status() -> Result<AuthStatusResponse> {
     let token = GithubAuthService::get_token()?;
     match token {
         Some(t) => match GithubAuthService::fetch_profile(&t).await {
-            Ok(profile) => Ok(AuthStatusResponse {
-                authenticated: true,
-                profile: Some(profile),
-            }),
-            Err(_) => {
-                // Token might be revoked or expired
+            Ok(profile) => {
+                let _ = GithubAuthService::save_profile(&profile);
                 Ok(AuthStatusResponse {
-                    authenticated: false,
-                    profile: None,
+                    authenticated: true,
+                    profile: Some(profile),
                 })
+            }
+            Err(err) => {
+                let err_str = err.to_string().to_lowercase();
+                if err_str.contains("401") || err_str.contains("unauthorized") {
+                    // Token is revoked
+                    let _ = GithubAuthService::delete_token();
+                    Ok(AuthStatusResponse {
+                        authenticated: false,
+                        profile: None,
+                    })
+                } else {
+                    // Network glitch or offline: retain authenticated state with cached profile
+                    let cached = GithubAuthService::get_cached_profile().unwrap_or(None);
+                    Ok(AuthStatusResponse {
+                        authenticated: true,
+                        profile: cached,
+                    })
+                }
             }
         },
         None => Ok(AuthStatusResponse {
@@ -95,10 +109,13 @@ pub async fn get_github_auth_status() -> Result<AuthStatusResponse> {
 pub async fn get_github_user_profile() -> Result<Option<GithubUserProfile>> {
     let token = GithubAuthService::get_token()?;
     match token {
-        Some(t) => {
-            let profile = GithubAuthService::fetch_profile(&t).await?;
-            Ok(Some(profile))
-        }
+        Some(t) => match GithubAuthService::fetch_profile(&t).await {
+            Ok(profile) => {
+                let _ = GithubAuthService::save_profile(&profile);
+                Ok(Some(profile))
+            }
+            Err(_) => Ok(GithubAuthService::get_cached_profile().unwrap_or(None)),
+        },
         None => Ok(None),
     }
 }
@@ -106,6 +123,26 @@ pub async fn get_github_user_profile() -> Result<Option<GithubUserProfile>> {
 #[tauri::command]
 pub async fn logout_github() -> Result<()> {
     GithubAuthService::delete_token()
+}
+
+#[tauri::command]
+pub async fn list_github_user_repos() -> Result<Vec<GithubRepoSummary>> {
+    let token = GithubAuthService::get_token()?.ok_or_else(|| {
+        AppError::Auth("No GitHub token stored in keychain. Please sign in first.".into())
+    })?;
+    GithubAuthService::list_user_repos(&token).await
+}
+
+#[tauri::command]
+pub async fn create_github_repo(
+    name: String,
+    description: Option<String>,
+    private: bool,
+) -> Result<GithubRepoSummary> {
+    let token = GithubAuthService::get_token()?.ok_or_else(|| {
+        AppError::Auth("No GitHub token stored in keychain. Please sign in first.".into())
+    })?;
+    GithubAuthService::create_user_repo(&token, &name, description.as_deref(), private).await
 }
 
 #[tauri::command]

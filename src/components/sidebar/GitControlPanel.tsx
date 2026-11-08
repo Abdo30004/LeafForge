@@ -13,11 +13,22 @@ import {
   X,
   PlusCircle,
   AlertCircle,
+  FolderGit2,
 } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { useGitStore } from '../../store/useGitStore';
 import { formatErrorMessage, formatErrorDetails } from '../../utils/formatError';
 import { logger } from '../../services/logger';
+
+const GithubIcon: React.FC<{ className?: string }> = ({ className = 'w-3.5 h-3.5' }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
+    />
+  </svg>
+);
 import {
   gitStatus,
   gitStage,
@@ -30,6 +41,8 @@ import {
   gitDiff,
   gitListBranches,
   gitCheckoutBranch,
+  gitIsRepo,
+  gitInit,
 } from '../../services/tauriClient';
 import { CloneRepoModal } from '../modals/CloneRepoModal';
 import type { GitFileStatus } from '../../types/git';
@@ -42,11 +55,15 @@ export const GitControlPanel: React.FC = () => {
   const behind = useGitStore((s) => s.behind);
   const staged = useGitStore((s) => s.staged);
   const unstaged = useGitStore((s) => s.unstaged);
+  const isRepo = useGitStore((s) => s.isRepo);
+  const setIsRepo = useGitStore((s) => s.setIsRepo);
+  const setConnectModalOpen = useGitStore((s) => s.setConnectModalOpen);
   const userProfile = useGitStore((s) => s.userProfile);
   const setGitStatus = useGitStore((s) => s.setGitStatus);
 
   const [commitMessage, setCommitMessage] = useState('');
   const [loadingStatus, setLoadingStatus] = useState(false);
+  const [loadingInit, setLoadingInit] = useState(false);
   const [loadingCommit, setLoadingCommit] = useState(false);
   const [loadingSync, setLoadingSync] = useState(false);
   const [branches, setBranches] = useState<string[]>([]);
@@ -66,8 +83,22 @@ export const GitControlPanel: React.FC = () => {
     if (!workspacePath) return;
     setLoadingStatus(true);
     try {
+      const isR = await gitIsRepo(workspacePath);
+      setIsRepo(isR);
+      if (!isR) {
+        setLoadingStatus(false);
+        return;
+      }
       const res = await gitStatus(workspacePath);
-      setGitStatus(res.branch, res.isClean, res.ahead, res.behind, res.staged, res.unstaged);
+      setGitStatus(
+        res.branch,
+        res.isClean,
+        res.ahead,
+        res.behind,
+        res.staged,
+        res.unstaged,
+        res.isRepo ?? true
+      );
       const bList = await gitListBranches(workspacePath);
       setBranches(bList);
     } catch (err) {
@@ -75,7 +106,25 @@ export const GitControlPanel: React.FC = () => {
     } finally {
       setLoadingStatus(false);
     }
-  }, [workspacePath, setGitStatus]);
+  }, [workspacePath, setGitStatus, setIsRepo]);
+
+  const handleInitRepo = async () => {
+    if (!workspacePath) return;
+    setLoadingInit(true);
+    setErrorMsg(null);
+    try {
+      await gitInit(workspacePath);
+      setIsRepo(true);
+      logger.info('Git', `Successfully initialized Git repository in: ${workspacePath}`);
+      await refreshStatus();
+    } catch (err) {
+      const msg = formatErrorMessage(err, 'Failed to initialize Git repository');
+      logger.error('Git', 'Git initialization failed', { error: formatErrorDetails(err) });
+      setErrorMsg(msg);
+    } finally {
+      setLoadingInit(false);
+    }
+  };
 
   useEffect(() => {
     refreshStatus();
@@ -254,8 +303,15 @@ export const GitControlPanel: React.FC = () => {
         </div>
         <div className="flex items-center space-x-1">
           <button
+            onClick={() => setConnectModalOpen(true)}
+            className="p-1 rounded hover:bg-[var(--hover-bg)] text-[var(--text-muted)] hover:text-accent-primary transition-colors cursor-pointer"
+            title="Connect or Publish to GitHub"
+          >
+            <GithubIcon className="w-3.5 h-3.5" />
+          </button>
+          <button
             onClick={() => setCloneModalOpen(true)}
-            className="p-1 rounded hover:bg-[var(--hover-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+            className="p-1 rounded hover:bg-[var(--hover-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
             title="Clone Repository"
           >
             <GitFork className="w-3.5 h-3.5" />
@@ -263,7 +319,7 @@ export const GitControlPanel: React.FC = () => {
           <button
             onClick={refreshStatus}
             disabled={loadingStatus}
-            className="p-1 rounded hover:bg-[var(--hover-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-50"
+            className="p-1 rounded hover:bg-[var(--hover-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-50 cursor-pointer"
             title="Refresh Git Status"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loadingStatus ? 'animate-spin text-accent-primary' : ''}`} />
@@ -271,7 +327,55 @@ export const GitControlPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* Branch & Sync Bar */}
+      {!workspacePath ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-2 text-[var(--text-muted)] text-xs">
+          <FolderGit2 className="w-8 h-8 opacity-40 text-accent-primary" />
+          <p>No project workspace opened.</p>
+        </div>
+      ) : !isRepo ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-4">
+          <div className="w-12 h-12 rounded-full bg-accent-primary/10 border border-accent-primary/20 flex items-center justify-center text-accent-primary">
+            <FolderGit2 className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+              No Git Repository Found
+            </h3>
+            <p className="text-xs text-[var(--text-muted)] max-w-xs leading-relaxed">
+              This workspace folder is not currently initialized with Git. Initialize it locally or connect directly to a GitHub repository.
+            </p>
+          </div>
+          {errorMsg && (
+            <div className="p-2.5 rounded bg-rose-500/10 border border-rose-500/20 text-xs text-rose-400 flex items-start space-x-2 max-w-xs text-left">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-rose-400" />
+              <span className="break-words">{errorMsg}</span>
+            </div>
+          )}
+          <div className="w-full space-y-2 pt-2 max-w-xs">
+            <button
+              onClick={handleInitRepo}
+              disabled={loadingInit}
+              className="w-full py-2 px-3 rounded-lg bg-accent-primary text-black font-semibold text-xs flex items-center justify-center space-x-2 hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50"
+            >
+              {loadingInit ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FolderGit2 className="w-4 h-4" />
+              )}
+              <span>Initialize Git Repository</span>
+            </button>
+            <button
+              onClick={() => setConnectModalOpen(true)}
+              className="w-full py-2 px-3 rounded-lg bg-[var(--hover-bg)] hover:bg-[var(--border-subtle)] border border-[var(--border-subtle)] text-[var(--text-primary)] font-medium text-xs flex items-center justify-center space-x-2 transition-colors cursor-pointer"
+            >
+              <GithubIcon className="w-4 h-4" />
+              <span>Connect to GitHub</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Branch & Sync Bar */}
       <div className="p-3 bg-[var(--canvas)]/40 border-b border-[var(--border-subtle)] space-y-2">
         <div className="flex items-center justify-between">
           <div className="relative">
@@ -511,6 +615,8 @@ export const GitControlPanel: React.FC = () => {
           )}
         </div>
       </div>
+      </>
+      )}
 
       {/* Diff Inspector Modal */}
       {inspectDiff && (

@@ -5,6 +5,7 @@ import type {
   AuthStatusResponse,
   CollaboratorPermission,
   GithubDeviceCode,
+  GithubRepoSummary,
   GithubUserProfile,
   GitRepoStatus,
   PollTokenResponse,
@@ -400,6 +401,61 @@ export async function logoutGithub(): Promise<void> {
   return invoke<void>('logout_github');
 }
 
+export async function listGithubUserRepos(): Promise<GithubRepoSummary[]> {
+  if (!isTauriEnvironment()) {
+    return [
+      {
+        id: 101,
+        name: 'latex-paper',
+        fullName: 'octocat/latex-paper',
+        private: false,
+        htmlUrl: 'https://github.com/octocat/latex-paper',
+        cloneUrl: 'https://github.com/octocat/latex-paper.git',
+        defaultBranch: 'main',
+        description: 'Collaborative academic paper on deep learning in LaTeX',
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: 102,
+        name: 'thesis-templates',
+        fullName: 'octocat/thesis-templates',
+        private: true,
+        htmlUrl: 'https://github.com/octocat/thesis-templates',
+        cloneUrl: 'https://github.com/octocat/thesis-templates.git',
+        defaultBranch: 'main',
+        description: 'Private graduate thesis template repository',
+        updatedAt: new Date().toISOString(),
+      },
+    ];
+  }
+  return invoke<GithubRepoSummary[]>('list_github_user_repos');
+}
+
+export async function createGithubRepo(
+  name: string,
+  privateRepo = true,
+  description?: string
+): Promise<GithubRepoSummary> {
+  if (!isTauriEnvironment()) {
+    return {
+      id: 999,
+      name,
+      fullName: `octocat/${name}`,
+      private: privateRepo,
+      htmlUrl: `https://github.com/octocat/${name}`,
+      cloneUrl: `https://github.com/octocat/${name}.git`,
+      defaultBranch: 'main',
+      description: description || null,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+  return invoke<GithubRepoSummary>('create_github_repo', {
+    name,
+    private: privateRepo,
+    description,
+  });
+}
+
 export async function verifyRepoCollaborator(
   owner: string,
   repo: string,
@@ -419,14 +475,29 @@ export async function getOrCreateRoomKey(projectDir: string): Promise<string> {
 }
 
 // Native Git Engine (libgit2) Bridges
+export async function gitIsRepo(projectDir: string): Promise<boolean> {
+  if (!isTauriEnvironment()) return true;
+  return invoke<boolean>('git_is_repo', { projectDir });
+}
+
 export async function gitInit(projectDir: string): Promise<void> {
   if (!isTauriEnvironment()) return;
   return invoke<void>('git_init', { projectDir });
 }
 
+export async function gitSetRemote(
+  projectDir: string,
+  url: string,
+  remoteName?: string
+): Promise<void> {
+  if (!isTauriEnvironment()) return;
+  return invoke<void>('git_set_remote', { projectDir, url, remoteName });
+}
+
 export async function gitStatus(projectDir: string): Promise<GitRepoStatus> {
   if (!isTauriEnvironment()) {
     return {
+      isRepo: true,
       branch: 'main',
       isClean: true,
       ahead: 0,

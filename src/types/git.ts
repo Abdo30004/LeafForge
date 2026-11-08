@@ -5,12 +5,25 @@ export interface GitFileStatus {
 }
 
 export interface GitRepoStatus {
+  isRepo?: boolean;
   branch: string;
   isClean: boolean;
   ahead: number;
   behind: number;
   staged: GitFileStatus[];
   unstaged: GitFileStatus[];
+}
+
+export interface GithubRepoSummary {
+  id: number;
+  name: string;
+  fullName: string;
+  private: boolean;
+  htmlUrl: string;
+  cloneUrl: string;
+  defaultBranch?: string;
+  description?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface GithubDeviceCode {

@@ -10,6 +10,7 @@ import { LatexEditor } from '../../editor/LatexEditor';
 import { PdfViewport } from '../pdf/PdfViewport';
 import { BuildLogDrawer } from '../diagnostics/BuildLogDrawer';
 import { GithubDeviceModal } from '../modals/GithubDeviceModal';
+import { ConnectGithubModal } from '../modals/ConnectGithubModal';
 import { ConflictModal } from '../modals/ConflictModal';
 import { CommandPalette } from '../modals/CommandPalette';
 import { formatErrorDetails } from '../../utils/formatError';
@@ -388,6 +389,9 @@ export const AppShell: React.FC = () => {
 
       {/* GitHub Device Flow Modal */}
       <GithubDeviceModal />
+
+      {/* Connect to GitHub Modal */}
+      <ConnectGithubModal />
 
       {/* 3-Way CRDT-Git Merge Conflict Modal */}
       <ConflictModal />

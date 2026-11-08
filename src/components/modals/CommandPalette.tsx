@@ -460,6 +460,15 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         },
       },
       {
+        id: 'git:connect-repo',
+        title: 'GitHub: Connect Workspace to Repository',
+        description: 'Link this workspace to an existing or new GitHub repository',
+        category: 'Git',
+        icon: <GitFork className="w-4 h-4 text-accent-primary" />,
+        keywords: ['github', 'connect', 'publish', 'remote', 'repo', 'link'],
+        action: () => useGitStore.getState().setConnectModalOpen(true),
+      },
+      {
         id: 'git:auth-login',
         title: 'GitHub: Connect Account (Device Flow)',
         description: 'Authorize with GitHub 8-character device code and store token in OS Keychain',
