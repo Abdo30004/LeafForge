@@ -15,8 +15,11 @@ import {
 import { foldGutter, indentOnInput, bracketMatching, foldKeymap } from '@codemirror/language';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
+import { yCollab } from 'y-codemirror.next';
 import { useWorkspaceStore } from '../store/useWorkspaceStore';
 import { useCompilerStore } from '../store/useCompilerStore';
+import { useCollabStore } from '../store/useCollabStore';
+import { collabManager } from '../services/collabManager';
 import { latexSupport } from './extensions/latexLanguage';
 import { bidiIsolation, detectLineDirection, toggleLineDirection } from './extensions/bidiIsolation';
 import { visualModeExtensions, setVisualModeEffect } from './extensions/visualModePlugin';
@@ -44,6 +47,7 @@ export const LatexEditor: React.FC<LatexEditorProps> = ({ className }) => {
   const setEditorJumpTarget = useWorkspaceStore((s) => s.setEditorJumpTarget);
 
   const diagnostics = useCompilerStore((s) => s.diagnostics);
+  const collabStatus = useCollabStore((s) => s.status);
 
   const content = activeFilePath ? (fileContents[activeFilePath] ?? '') : '';
 
@@ -129,6 +133,9 @@ export const LatexEditor: React.FC<LatexEditorProps> = ({ className }) => {
       ...inlineDiagnostics(() => useCompilerStore.getState().diagnostics),
       ...lspClient(() => activeUri),
       ...visualModeExtensions(editorMode === 'visual'),
+      ...(collabStatus === 'connected' && collabManager.provider && activeFilePath
+        ? [yCollab(collabManager.getYText(activeFilePath, content), collabManager.provider.awareness)]
+        : []),
       EditorView.updateListener.of((update) => {
         // Document changes -> update store
         if (update.docChanged) {
@@ -149,6 +156,9 @@ export const LatexEditor: React.FC<LatexEditorProps> = ({ className }) => {
 
           const isRtl = detectLineDirection(line.text) === 'rtl';
           setActiveLineIsRtl(isRtl);
+
+          const curFile = useWorkspaceStore.getState().activeFilePath;
+          collabManager.updateLocalCursor(lineNum, colNum, curFile || undefined);
         }
       }),
     ];
@@ -169,7 +179,7 @@ export const LatexEditor: React.FC<LatexEditorProps> = ({ className }) => {
       view.destroy();
       viewRef.current = null;
     };
-  }, [activeFilePath]);
+  }, [activeFilePath, collabStatus]);
 
   // 2. Synchronize external content changes (e.g. from file watcher or Git)
   useEffect(() => {
