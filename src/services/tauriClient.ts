@@ -2,6 +2,16 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { FileEntry, FsChangeEvent } from '../types/ipc';
 import type {
+  AuthStatusResponse,
+  CollaboratorPermission,
+  GithubDeviceCode,
+  GithubUserProfile,
+  GitRepoStatus,
+  PollTokenResponse,
+  PullResult,
+  ReconcileResult,
+} from '../types/git';
+import type {
   CompilationResult,
   EngineInfo,
   LatexEngine,
@@ -270,4 +280,211 @@ export async function listFontFamilies(): Promise<string[]> {
     return ['Amiri', 'JetBrains Mono', 'Inter', 'Scheherazade New', 'Frank Ruhl Libre'];
   }
   return invoke<string[]>('list_font_families');
+}
+
+// GitHub OAuth Device Flow & Keychain Bridges
+export async function startGithubDeviceFlow(clientId?: string): Promise<GithubDeviceCode> {
+  if (!isTauriEnvironment()) {
+    return {
+      deviceCode: 'mock-device-code-12345',
+      userCode: 'WDJB-MJHT',
+      verificationUri: 'https://github.com/login/device',
+      expiresIn: 900,
+      interval: 5,
+    };
+  }
+  return invoke<GithubDeviceCode>('start_github_device_flow', { clientId });
+}
+
+export async function pollGithubDeviceToken(
+  clientId: string | undefined,
+  deviceCode: string
+): Promise<PollTokenResponse> {
+  if (!isTauriEnvironment()) {
+    return {
+      status: 'success',
+      accessToken: 'mock_gho_token',
+    };
+  }
+  return invoke<PollTokenResponse>('poll_github_device_token', { clientId, deviceCode });
+}
+
+export async function getGithubAuthStatus(): Promise<AuthStatusResponse> {
+  if (!isTauriEnvironment()) {
+    return {
+      authenticated: false,
+      profile: null,
+    };
+  }
+  return invoke<AuthStatusResponse>('get_github_auth_status');
+}
+
+export async function getGithubUserProfile(): Promise<GithubUserProfile | null> {
+  if (!isTauriEnvironment()) {
+    return null;
+  }
+  return invoke<GithubUserProfile | null>('get_github_user_profile');
+}
+
+export async function logoutGithub(): Promise<void> {
+  if (!isTauriEnvironment()) return;
+  return invoke<void>('logout_github');
+}
+
+export async function verifyRepoCollaborator(
+  owner: string,
+  repo: string,
+  username: string
+): Promise<CollaboratorPermission> {
+  if (!isTauriEnvironment()) {
+    return { permission: 'admin', canWrite: true, canRead: true };
+  }
+  return invoke<CollaboratorPermission>('verify_repo_collaborator', { owner, repo, username });
+}
+
+export async function getOrCreateRoomKey(projectDir: string): Promise<string> {
+  if (!isTauriEnvironment()) {
+    return '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+  }
+  return invoke<string>('get_or_create_room_key', { projectDir });
+}
+
+// Native Git Engine (libgit2) Bridges
+export async function gitInit(projectDir: string): Promise<void> {
+  if (!isTauriEnvironment()) return;
+  return invoke<void>('git_init', { projectDir });
+}
+
+export async function gitStatus(projectDir: string): Promise<GitRepoStatus> {
+  if (!isTauriEnvironment()) {
+    return {
+      branch: 'main',
+      isClean: true,
+      ahead: 0,
+      behind: 0,
+      staged: [],
+      unstaged: [],
+    };
+  }
+  return invoke<GitRepoStatus>('git_status', { projectDir });
+}
+
+export async function gitDiff(
+  projectDir: string,
+  filePath?: string,
+  staged = false
+): Promise<string> {
+  if (!isTauriEnvironment()) {
+    return `diff --git a/${filePath || 'file.tex'} b/${filePath || 'file.tex'}\n@@ -1,3 +1,3 @@\n-Old Line\n+New Line`;
+  }
+  return invoke<string>('git_diff', { projectDir, filePath, staged });
+}
+
+export async function gitStage(projectDir: string, filePath: string): Promise<void> {
+  if (!isTauriEnvironment()) return;
+  return invoke<void>('git_stage', { projectDir, filePath });
+}
+
+export async function gitUnstage(projectDir: string, filePath: string): Promise<void> {
+  if (!isTauriEnvironment()) return;
+  return invoke<void>('git_unstage', { projectDir, filePath });
+}
+
+export async function gitStageAll(projectDir: string): Promise<void> {
+  if (!isTauriEnvironment()) return;
+  return invoke<void>('git_stage_all', { projectDir });
+}
+
+export async function gitUnstageAll(projectDir: string): Promise<void> {
+  if (!isTauriEnvironment()) return;
+  return invoke<void>('git_unstage_all', { projectDir });
+}
+
+export async function gitCommit(
+  projectDir: string,
+  message: string,
+  authorName?: string,
+  authorEmail?: string
+): Promise<string> {
+  if (!isTauriEnvironment()) {
+    return '0123456789abcdef0123456789abcdef01234567';
+  }
+  return invoke<string>('git_commit', {
+    projectDir,
+    message,
+    authorName,
+    authorEmail,
+  });
+}
+
+export async function gitClone(
+  url: string,
+  targetPath: string,
+  branch?: string
+): Promise<void> {
+  if (!isTauriEnvironment()) return;
+  return invoke<void>('git_clone', { url, targetPath, branch });
+}
+
+export async function gitPush(
+  projectDir: string,
+  remoteName?: string,
+  branch?: string
+): Promise<void> {
+  if (!isTauriEnvironment()) return;
+  return invoke<void>('git_push', { projectDir, remoteName, branch });
+}
+
+export async function gitPull(
+  projectDir: string,
+  remoteName?: string,
+  branch?: string
+): Promise<PullResult> {
+  if (!isTauriEnvironment()) {
+    return {
+      success: true,
+      upToDate: true,
+      fastForward: false,
+      message: 'Already up to date.',
+    };
+  }
+  return invoke<PullResult>('git_pull', { projectDir, remoteName, branch });
+}
+
+export async function gitListBranches(projectDir: string): Promise<string[]> {
+  if (!isTauriEnvironment()) {
+    return ['main', 'feat/draft-section'];
+  }
+  return invoke<string[]>('git_list_branches', { projectDir });
+}
+
+export async function gitCheckoutBranch(
+  projectDir: string,
+  branchName: string,
+  create = false
+): Promise<void> {
+  if (!isTauriEnvironment()) return;
+  return invoke<void>('git_checkout_branch', { projectDir, branchName, create });
+}
+
+export async function gitReconcile3Way(
+  base: string,
+  crdt: string,
+  remote: string
+): Promise<ReconcileResult> {
+  if (!isTauriEnvironment()) {
+    if (crdt === remote || remote === base) {
+      return { clean: true, mergedText: crdt, hasConflicts: false, conflictCount: 0 };
+    }
+    if (crdt === base) {
+      return { clean: true, mergedText: remote, hasConflicts: false, conflictCount: 0 };
+    }
+    return {
+      clean: false,
+      mergedText: `<<<<<<< LIVE SESSION (CRDT)\n${crdt}\n=======\n${remote}\n>>>>>>> INCOMING GIT COMMIT`,
+      hasConflicts: true,
+      conflictCount: 1,
+    };
+  }
+  return invoke<ReconcileResult>('git_reconcile_3way', { base, crdt, remote });
 }

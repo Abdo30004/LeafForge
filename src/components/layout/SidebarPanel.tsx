@@ -1,11 +1,11 @@
 import React, { useRef, useEffect } from 'react';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
-import { useGitStore } from '../../store/useGitStore';
-import { useCollabStore } from '../../store/useCollabStore';
 import { FileTreePanel } from '../sidebar/FileTreePanel';
 import { OutlinePanel } from '../sidebar/OutlinePanel';
 import { PackageFontPanel } from '../sidebar/PackageFontPanel';
-import { GitBranch, Users, Settings } from 'lucide-react';
+import { GitControlPanel } from '../sidebar/GitControlPanel';
+import { CollabPanel } from '../sidebar/CollabPanel';
+import { Settings } from 'lucide-react';
 
 export const SidebarPanel: React.FC = () => {
   const activeTab = useWorkspaceStore((s) => s.activeSidebarTab);
@@ -14,11 +14,6 @@ export const SidebarPanel: React.FC = () => {
   const setWidth = useWorkspaceStore((s) => s.setSidebarWidth);
   const theme = useWorkspaceStore((s) => s.theme);
   const setTheme = useWorkspaceStore((s) => s.setTheme);
-
-  const gitBranch = useGitStore((s) => s.branch);
-  const isGitClean = useGitStore((s) => s.isClean);
-  const collabStatus = useCollabStore((s) => s.status);
-  const collabPeers = useCollabStore((s) => s.peers);
 
   const isResizingRef = useRef(false);
 
@@ -57,45 +52,9 @@ export const SidebarPanel: React.FC = () => {
 
         {activeTab === 'packages' && <PackageFontPanel />}
 
-        {activeTab === 'git' && (
-          <div className="flex flex-col h-full p-3 space-y-3">
-            <div className="flex items-center space-x-1.5 pb-2 border-b border-[var(--border-subtle)] text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-              <GitBranch className="w-3.5 h-3.5 text-accent-primary" />
-              <span>Source Control</span>
-            </div>
-            <div className="bg-[var(--canvas)] p-2.5 rounded border border-[var(--border-subtle)] space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-[var(--text-muted)]">Active Branch:</span>
-                <span className="font-mono text-accent-primary font-medium">{gitBranch}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-[var(--text-muted)]">Working Tree:</span>
-                <span className={`text-[11px] font-medium ${isGitClean ? 'text-emerald-400' : 'text-amber-400'}`}>
-                  {isGitClean ? 'Clean' : 'Modified changes'}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
+        {activeTab === 'git' && <GitControlPanel />}
 
-        {activeTab === 'collab' && (
-          <div className="flex flex-col h-full p-3 space-y-3">
-            <div className="flex items-center space-x-1.5 pb-2 border-b border-[var(--border-subtle)] text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-              <Users className="w-3.5 h-3.5 text-accent-primary" />
-              <span>Collaborators</span>
-            </div>
-            <div className="bg-[var(--canvas)] p-2.5 rounded border border-[var(--border-subtle)] space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-[var(--text-muted)]">Room Status:</span>
-                <span className="capitalize text-xs font-medium text-emerald-400">{collabStatus}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-[var(--text-muted)]">Active Peers:</span>
-                <span className="text-xs font-mono">{collabPeers.length} online</span>
-              </div>
-            </div>
-          </div>
-        )}
+        {activeTab === 'collab' && <CollabPanel />}
 
         {activeTab === 'settings' && (
           <div className="flex flex-col h-full p-3 space-y-4">

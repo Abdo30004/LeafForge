@@ -33,6 +33,15 @@ pub enum AppError {
     #[error("LSP error: {0}")]
     Lsp(String),
 
+    #[error("GitHub auth error: {0}")]
+    Auth(String),
+
+    #[error("Keyring error: {0}")]
+    Keyring(String),
+
+    #[error("Git error: {0}")]
+    Git(String),
+
     #[error("Internal error: {0}")]
     Internal(String),
 }
@@ -69,6 +78,9 @@ impl Serialize for AppError {
             AppError::SyncTex(msg) => ("SYNCTEX_ERROR", msg.clone(), None),
             AppError::Font(msg) => ("FONT_ERROR", msg.clone(), None),
             AppError::Lsp(msg) => ("LSP_ERROR", msg.clone(), None),
+            AppError::Auth(msg) => ("AUTH_ERROR", msg.clone(), None),
+            AppError::Keyring(msg) => ("KEYRING_ERROR", msg.clone(), None),
+            AppError::Git(msg) => ("GIT_ERROR", msg.clone(), None),
             AppError::Internal(msg) => ("INTERNAL_ERROR", msg.clone(), None),
         };
 

@@ -389,11 +389,11 @@ Execute the build strictly in the 6 phases below. At the end of every step, run 
   - *Commit:* `feat(pdf): implement double-buffered pdf.js viewer, synctex jump, and detachable window`
 
 ### Phase 4: GitHub OAuth Device Flow, OS Keychain & Native `git2-rs` Engine
-- [ ] **Step 4.1:** Implement `github_auth.rs` and `auth_cmds.rs` for the GitHub OAuth Device Flow + `keyring` native credential storage, paired with `GithubDeviceModal.tsx`.
+- [x] **Step 4.1:** Implement `github_auth.rs` and `auth_cmds.rs` for the GitHub OAuth Device Flow + `keyring` native credential storage, paired with `GithubDeviceModal.tsx`.
   - *Commit:* `feat(auth): implement github oauth device flow and os keychain token persistence`
-- [ ] **Step 4.2:** Implement `git_engine.rs` and `git_cmds.rs` (`clone`, `status`, `diff`, `stage`, `unstage`, `commit`, `push`, `pull`, `branch`) with authenticated `git2::RemoteCallbacks`.
+- [x] **Step 4.2:** Implement `git_engine.rs` and `git_cmds.rs` (`clone`, `status`, `diff`, `stage`, `unstage`, `commit`, `push`, `pull`, `branch`) with authenticated `git2::RemoteCallbacks`.
   - *Commit:* `feat(git): implement native libgit2 repository operations with oauth callbacks`
-- [ ] **Step 4.3:** Build `GitControlPanel.tsx` and `CloneRepoModal.tsx` allowing users to clone their GitHub repositories, inspect inline diffs, stage files, commit, and push/pull from the sidebar.
+- [x] **Step 4.3:** Build `GitControlPanel.tsx` and `CloneRepoModal.tsx` allowing users to clone their GitHub repositories, inspect inline diffs, stage files, commit, and push/pull from the sidebar.
   - *Commit:* `feat(git-ui): build git staging sidebar, diff inspector, and github repo cloner`
 
 ### Phase 5: Yjs Live Collaboration, GitHub Permission Gate & CRDT-to-Git Reconciler
@@ -420,4 +420,4 @@ Before marking the project complete, verify and check off every criterion below:
 - [ ] **Dual-Mode Editor Fidelity:** Switching between **Raw Source** and **Visual Mode** renders inline/display math via KaTeX, section headers, and tables without altering a single byte of the underlying `.tex` document unless edited.
 - [ ] **RTL & BiDi Stability:** Typing mixed Arabic/Hebrew sentences containing `\cite{knuth1984}` and `$\alpha + \beta = \gamma$` maintains right-to-left paragraph flow while keeping the LaTeX command and math expression strictly left-to-right.
 - [x] **Auto-Compile & Flicker-Free PDF:** Saving or pausing typing for $400\text{ ms}$ triggers background compilation (`Tectonic`, `LuaLaTeX`, `XeLaTeX`, or `pdfLaTeX`), updates the PDF canvas via double-buffering with zero white flash, and supports two-way `Cmd/Ctrl+Click` SyncTeX jumping.
-- [ ] **GitHub Device Auth & Git Sync:** User can authenticate via the 8-character GitHub Device Code, clone a repository, stage/commit/push changes via native `git2`, and reconcile external Git commits with live Yjs CRDT sessions without data loss.
+- [x] **GitHub Device Auth & Git Sync:** User can authenticate via the 8-character GitHub Device Code, clone a repository, stage/commit/push changes via native `git2`, and reconcile external Git commits with live Yjs CRDT sessions without data loss.

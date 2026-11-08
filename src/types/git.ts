@@ -27,3 +27,37 @@ export interface GithubUserProfile {
   avatarUrl: string;
   email?: string;
 }
+
+export interface CollaboratorPermission {
+  permission: 'admin' | 'write' | 'read' | 'none';
+  canWrite: boolean;
+  canRead: boolean;
+}
+
+export interface AuthStatusResponse {
+  authenticated: boolean;
+  profile?: GithubUserProfile | null;
+}
+
+export interface PollTokenResponse {
+  status: 'success' | 'pending' | 'slow_down' | 'expired' | 'denied' | 'error';
+  accessToken?: string;
+  error?: string;
+  errorDescription?: string;
+  interval?: number;
+}
+
+export interface PullResult {
+  success: boolean;
+  upToDate: boolean;
+  fastForward: boolean;
+  message: string;
+  newHead?: string | null;
+}
+
+export interface ReconcileResult {
+  clean: boolean;
+  mergedText: string;
+  hasConflicts: boolean;
+  conflictCount: number;
+}

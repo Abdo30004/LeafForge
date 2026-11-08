@@ -3,6 +3,10 @@ pub mod error;
 pub mod services;
 pub mod state;
 
+use commands::auth_cmds::{
+    get_github_auth_status, get_github_user_profile, get_or_create_room_key, logout_github,
+    poll_github_device_token, start_github_device_flow, verify_repo_collaborator,
+};
 use commands::compiler_cmds::{
     abort_compilation, clean_aux_files, compile_document, detect_engines, parse_magic_comments,
 };
@@ -10,6 +14,11 @@ use commands::font_cmds::{list_font_families, list_system_fonts};
 use commands::fs_cmds::{
     create_dir, create_file, delete_path, import_binary_asset, list_files, open_folder,
     read_file_text, rename_path, unwatch_directory, watch_directory, write_file_text,
+};
+use commands::git_cmds::{
+    git_checkout_branch, git_clone, git_commit, git_diff, git_init, git_list_branches,
+    git_pull, git_push, git_reconcile_3way, git_stage, git_stage_all, git_status,
+    git_unstage, git_unstage_all,
 };
 use commands::lsp_cmds::{
     lsp_completion, lsp_did_change, lsp_did_open, lsp_hover, lsp_start, lsp_status, lsp_stop,
@@ -50,6 +59,27 @@ pub fn run() {
             synctex_inverse,
             list_system_fonts,
             list_font_families,
+            start_github_device_flow,
+            poll_github_device_token,
+            get_github_auth_status,
+            get_github_user_profile,
+            logout_github,
+            verify_repo_collaborator,
+            get_or_create_room_key,
+            git_init,
+            git_status,
+            git_diff,
+            git_stage,
+            git_unstage,
+            git_stage_all,
+            git_unstage_all,
+            git_commit,
+            git_clone,
+            git_push,
+            git_pull,
+            git_list_branches,
+            git_checkout_branch,
+            git_reconcile_3way,
         ])
         .run(tauri::generate_context!())
         .expect("error while running leafforge application");
