@@ -349,4 +349,45 @@ Underfull \vbox (badness 10000) has occurred while \output is active [1]
         assert_eq!(normalize_file_path("./sections/intro.tex", None), "sections/intro.tex");
         assert_eq!(normalize_file_path("\"sections\\ch1.tex\"", None), "sections/ch1.tex");
     }
+
+    #[test]
+    fn test_fatal_error_parsing() {
+        let log = r#"
+! LaTeX Error: File `pgf.sty' not found.
+Type X to quit or <RETURN> to proceed
+! Emergency stop.
+"#;
+        let diags = parse_latex_log(log, "main.tex", None);
+        assert!(!diags.is_empty());
+        assert_eq!(diags[0].severity, DiagnosticSeverity::Error);
+        assert!(diags[0].message.contains("pgf.sty' not found"));
+    }
+
+    #[test]
+    fn test_nested_file_stack_tracking() {
+        let log = r#"
+(./sections/intro.tex
+(./sections/intro_sub.tex
+! Undefined control sequence.
+l.15 \unknownsubmacro
+)
+)
+"#;
+        let diags = parse_latex_log(log, "main.tex", None);
+        assert_eq!(diags.len(), 1);
+        assert_eq!(diags[0].file_path, "sections/intro_sub.tex");
+        assert_eq!(diags[0].line, 15);
+    }
+
+    #[test]
+    fn test_clean_log_produces_no_diagnostics() {
+        let log = r#"
+This is pdfTeX, Version 3.141592653-2.6-1.40.24 (TeX Live 2022)
+(./main.tex [1] [2])
+Output written on main.pdf (2 pages, 102400 bytes).
+Transcript written on main.log.
+"#;
+        let diags = parse_latex_log(log, "main.tex", None);
+        assert!(diags.is_empty());
+    }
 }

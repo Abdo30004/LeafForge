@@ -11,6 +11,7 @@ import { PdfViewport } from '../pdf/PdfViewport';
 import { BuildLogDrawer } from '../diagnostics/BuildLogDrawer';
 import { GithubDeviceModal } from '../modals/GithubDeviceModal';
 import { ConflictModal } from '../modals/ConflictModal';
+import { CommandPalette } from '../modals/CommandPalette';
 import { X, FileCode, FileText, BookOpen, Image as ImageIcon } from 'lucide-react';
 
 export const AppShell: React.FC = () => {
@@ -221,6 +222,9 @@ export const AppShell: React.FC = () => {
 
       {/* 3-Way CRDT-Git Merge Conflict Modal */}
       <ConflictModal />
+
+      {/* Cmd/Ctrl+K Global Command Palette */}
+      <CommandPalette />
     </div>
   );
 };

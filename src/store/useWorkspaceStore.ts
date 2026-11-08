@@ -24,6 +24,7 @@ export interface WorkspaceState {
   activeLineIsRtl: boolean;
   outlineItems: OutlineItem[];
   editorJumpTarget: { line: number; col?: number } | null;
+  commandPaletteOpen: boolean;
 
   setWorkspacePath: (path: string | null) => void;
   setFiles: (files: FileEntry[]) => void;
@@ -44,6 +45,8 @@ export interface WorkspaceState {
   setActiveLineIsRtl: (isRtl: boolean) => void;
   setOutlineItems: (items: OutlineItem[]) => void;
   setEditorJumpTarget: (target: { line: number; col?: number } | null) => void;
+  setCommandPaletteOpen: (open: boolean) => void;
+  toggleCommandPalette: () => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
@@ -64,6 +67,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   activeLineIsRtl: false,
   outlineItems: [],
   editorJumpTarget: null,
+  commandPaletteOpen: false,
 
   setWorkspacePath: (path) => set({ workspacePath: path }),
 
@@ -148,4 +152,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   setOutlineItems: (outlineItems) => set({ outlineItems }),
 
   setEditorJumpTarget: (editorJumpTarget) => set({ editorJumpTarget }),
+
+  setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
+
+  toggleCommandPalette: () =>
+    set((state) => ({ commandPaletteOpen: !state.commandPaletteOpen })),
 }));
