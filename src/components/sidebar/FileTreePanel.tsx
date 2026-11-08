@@ -17,9 +17,13 @@ import {
   Star,
   AlertCircle,
   X,
+  Eye,
+  EyeOff,
+  FileQuestion,
 } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import type { FileEntry } from '../../types/ipc';
+import { getFileCategory, isBuildArtifact } from '../../utils/fileCategory';
 import {
   openFolder,
   listFiles,
@@ -55,6 +59,7 @@ export const FileTreePanel: React.FC = () => {
   }>({ type: null });
   const [modalInput, setModalInput] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showHidden, setShowHidden] = useState<boolean>(false);
 
   const refreshTree = useCallback(async () => {
     if (!workspacePath) return;
@@ -142,16 +147,22 @@ export const FileTreePanel: React.FC = () => {
       return;
     }
 
-    try {
-      const content = await readFileText(entry.path);
-      openFile(entry.path, content);
-    } catch (err) {
-      const msg = formatErrorMessage(err, `Failed to read file: ${entry.name}`);
-      logger.error('FileSystem', `Failed to read file: ${entry.path}`, {
-        error: formatErrorDetails(err),
-        path: entry.path,
-      });
-      setErrorMsg(msg);
+    const category = getFileCategory(entry.path);
+    if (category === 'text') {
+      try {
+        const content = await readFileText(entry.path);
+        openFile(entry.path, content);
+      } catch (err) {
+        const msg = formatErrorMessage(err, `Failed to read file: ${entry.name}`);
+        logger.error('FileSystem', `Failed to read file: ${entry.path}`, {
+          error: formatErrorDetails(err),
+          path: entry.path,
+        });
+        setErrorMsg(msg);
+        openFile(entry.path, '');
+      }
+    } else {
+      // For images, PDFs, and unsupported formats, open directly without UTF-8 string parse
       openFile(entry.path, '');
     }
   };
@@ -261,24 +272,32 @@ export const FileTreePanel: React.FC = () => {
   };
 
   const getFileIcon = (fileName: string) => {
+    const category = getFileCategory(fileName);
+    if (category === 'image') return <ImageIcon className="w-3.5 h-3.5 text-emerald-400 shrink-0" />;
+    if (category === 'pdf') return <FileText className="w-3.5 h-3.5 text-rose-400 shrink-0" />;
+    if (category === 'unsupported') return <FileQuestion className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />;
+
     const ext = fileName.split('.').pop()?.toLowerCase();
     if (ext === 'tex') return <FileCode className="w-3.5 h-3.5 text-sky-400 shrink-0" />;
     if (ext === 'bib') return <BookOpen className="w-3.5 h-3.5 text-amber-400 shrink-0" />;
     if (ext === 'cls' || ext === 'sty')
       return <FileText className="w-3.5 h-3.5 text-purple-400 shrink-0" />;
-    if (['png', 'pdf', 'eps', 'jpg', 'jpeg', 'svg'].includes(ext ?? ''))
-      return <ImageIcon className="w-3.5 h-3.5 text-emerald-400 shrink-0" />;
     return <FileText className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />;
   };
 
   const renderEntry = (entry: FileEntry, depth = 0) => {
+    const isArtifact = isBuildArtifact(entry.name);
+    if (!showHidden && isArtifact) {
+      return null;
+    }
+
     const isExpanded = expandedFolders[entry.path] ?? depth === 0;
     const isActive = activeFilePath === entry.path;
     const isRoot = rootTexFile === entry.path;
     const isDirty = dirtyFiles[entry.path] ?? false;
 
     return (
-      <div key={entry.path} className="flex flex-col select-none">
+      <div key={entry.path} className={`flex flex-col select-none ${isArtifact ? 'opacity-60' : ''}`}>
         <div
           onClick={() => handleFileClick(entry)}
           style={{ paddingLeft: `${depth * 12 + 8}px` }}
@@ -316,6 +335,12 @@ export const FileTreePanel: React.FC = () => {
             {isRoot && (
               <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20 shrink-0">
                 ROOT
+              </span>
+            )}
+
+            {isArtifact && (
+              <span className="text-[9px] px-1 rounded bg-[var(--border-subtle)] text-[var(--text-muted)] font-mono shrink-0">
+                build
               </span>
             )}
 
@@ -418,6 +443,21 @@ export const FileTreePanel: React.FC = () => {
               title="Refresh Files"
             >
               <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setShowHidden((prev) => !prev)}
+              className={`p-1 rounded transition-colors ${
+                showHidden
+                  ? 'text-accent-primary bg-[var(--hover-bg)]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--hover-bg)]'
+              }`}
+              title={
+                showHidden
+                  ? 'Hide build artifacts (.aux, .log, .synctex)'
+                  : 'Show build artifacts (.aux, .log, .synctex)'
+              }
+            >
+              {showHidden ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
             </button>
           </div>
         )}

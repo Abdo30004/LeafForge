@@ -14,7 +14,11 @@ import { ConflictModal } from '../modals/ConflictModal';
 import { CommandPalette } from '../modals/CommandPalette';
 import { formatErrorDetails } from '../../utils/formatError';
 import { logger } from '../../services/logger';
-import { X, FileCode, FileText, BookOpen, Image as ImageIcon } from 'lucide-react';
+import { ImagePreview } from '../preview/ImagePreview';
+import { PdfDocumentPreview } from '../preview/PdfDocumentPreview';
+import { UnsupportedFilePreview } from '../preview/UnsupportedFilePreview';
+import { getFileCategory } from '../../utils/fileCategory';
+import { X, FileCode, FileText, BookOpen, Image as ImageIcon, FileQuestion } from 'lucide-react';
 
 export const AppShell: React.FC = () => {
   const activeFilePath = useWorkspaceStore((s) => s.activeFilePath);
@@ -117,11 +121,14 @@ export const AppShell: React.FC = () => {
   };
 
   const getTabIcon = (path: string) => {
+    const category = getFileCategory(path);
+    if (category === 'image') return <ImageIcon className="w-3.5 h-3.5 text-emerald-400 shrink-0" />;
+    if (category === 'pdf') return <FileText className="w-3.5 h-3.5 text-rose-400 shrink-0" />;
+    if (category === 'unsupported') return <FileQuestion className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />;
+
     const ext = path.split('.').pop()?.toLowerCase();
     if (ext === 'tex') return <FileCode className="w-3.5 h-3.5 text-sky-400 shrink-0" />;
     if (ext === 'bib') return <BookOpen className="w-3.5 h-3.5 text-amber-400 shrink-0" />;
-    if (['png', 'pdf', 'eps', 'jpg'].includes(ext ?? ''))
-      return <ImageIcon className="w-3.5 h-3.5 text-emerald-400 shrink-0" />;
     return <FileText className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />;
   };
 
@@ -186,14 +193,26 @@ export const AppShell: React.FC = () => {
           <div className="flex-1 flex flex-col overflow-hidden relative">
             {activeFilePath ? (
               <div className="flex-1 flex flex-col overflow-hidden relative">
-                <LatexEditor className="flex-1 w-full h-full" />
+                {(() => {
+                  const category = getFileCategory(activeFilePath);
+                  if (category === 'image') {
+                    return <ImagePreview filePath={activeFilePath} />;
+                  }
+                  if (category === 'pdf') {
+                    return <PdfDocumentPreview filePath={activeFilePath} />;
+                  }
+                  if (category === 'unsupported') {
+                    return <UnsupportedFilePreview filePath={activeFilePath} />;
+                  }
+                  return <LatexEditor className="flex-1 w-full h-full" />;
+                })()}
               </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-2">
                 <FileCode className="w-12 h-12 text-[var(--text-muted)] stroke-1" />
                 <p className="text-sm font-medium text-[var(--text-primary)]">Select a file to edit</p>
                 <p className="text-xs text-[var(--text-muted)] max-w-sm">
-                  Choose a LaTeX file (.tex) or bibliography (.bib) from the explorer sidebar to open it.
+                  Choose a LaTeX file (.tex), bibliography (.bib), or asset from the explorer sidebar to open it.
                 </p>
               </div>
             )}

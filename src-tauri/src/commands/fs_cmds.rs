@@ -26,6 +26,8 @@ const IGNORED_DIRS: &[&str] = &[
     "dist",
     ".vite",
     ".leafforge-cache",
+    ".texflow",
+    ".leafforge",
 ];
 
 const ALLOWED_ASSET_EXTS: &[&str] = &[
@@ -106,7 +108,7 @@ pub fn read_dir_recursive(path: &Path) -> Result<Vec<FileEntry>> {
         let metadata = entry.metadata()?;
         let is_dir = metadata.is_dir();
 
-        if is_dir && IGNORED_DIRS.contains(&file_name.as_str()) {
+        if is_dir && (file_name.starts_with('.') || IGNORED_DIRS.contains(&file_name.as_str())) {
             continue;
         }
 
