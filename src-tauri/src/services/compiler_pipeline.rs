@@ -182,7 +182,7 @@ pub fn calculate_preamble_hash(project_dir: &Path, preamble: &str) -> String {
 
 pub fn get_preamble_cache_path(project_dir: &Path, hash: &str) -> PathBuf {
     project_dir
-        .join(".leafforge-cache")
+        .join(".leafforge")
         .join(format!("preamble_{hash}.fmt"))
 }
 
@@ -327,21 +327,27 @@ pub fn clean_auxiliary_files(project_dir: &Path, root_filename: &str) -> Result<
     .collect();
 
     let mut removed = Vec::new();
+    let dirs_to_clean = [
+        project_dir.to_path_buf(),
+        project_dir.join(".leafforge"),
+    ];
 
-    if let Ok(entries) = std::fs::read_dir(project_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_file()
-                && let Some(file_name) = path.file_name().and_then(|s| s.to_str())
-            {
-                let file_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-
-                if file_stem == stem
-                    && aux_extensions.contains(extension)
-                    && std::fs::remove_file(&path).is_ok()
+    for dir in &dirs_to_clean {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file()
+                    && let Some(file_name) = path.file_name().and_then(|s| s.to_str())
                 {
-                    removed.push(file_name.to_string());
+                    let file_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                    let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+
+                    if file_stem == stem
+                        && aux_extensions.contains(extension)
+                        && std::fs::remove_file(&path).is_ok()
+                    {
+                        removed.push(file_name.to_string());
+                    }
                 }
             }
         }
@@ -381,9 +387,17 @@ pub async fn execute_compilation(
         .and_then(|s| s.to_str())
         .unwrap_or("main");
 
-    let expected_pdf = config.project_dir.join(format!("{root_stem}.pdf"));
-    let expected_synctex_gz = config.project_dir.join(format!("{root_stem}.synctex.gz"));
-    let expected_synctex = config.project_dir.join(format!("{root_stem}.synctex"));
+    // Hidden output directory for all compiler artifacts
+    let out_dir = config.project_dir.join(".leafforge");
+    let _ = std::fs::create_dir_all(&out_dir);
+
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("attrib")
+            .arg("+h")
+            .arg(&out_dir)
+            .output();
+    }
 
     let mut cmd = new_background_command(&bin_path);
     cmd.current_dir(&config.project_dir);
@@ -397,12 +411,17 @@ pub async fn execute_compilation(
                 .arg("compile")
                 .arg("--synctex")
                 .arg("--keep-logs")
+                .arg("--outdir")
+                .arg(&out_dir)
                 .arg(&config.root_file);
         }
         LatexEngine::LuaLatex | LatexEngine::XeLatex | LatexEngine::PdfLatex => {
             cmd.arg("-synctex=1")
                 .arg("-interaction=nonstopmode")
                 .arg("-file-line-error");
+
+            // Redirect all auxiliary files, logs, and output PDF into .leafforge
+            cmd.arg(format!("-output-directory={}", out_dir.to_string_lossy()));
 
             // Under MiKTeX, automatically install missing CTAN packages on the fly
             if bin_path.to_string_lossy().to_lowercase().contains("miktex") {
@@ -478,18 +497,58 @@ pub async fn execute_compilation(
     let stdout_text = read_stdout_handle.await.unwrap_or_default();
     let stderr_text = read_stderr_handle.await.unwrap_or_default();
 
+    // Prefer log file in .leafforge, fallback to project root or stdout/stderr
     let mut log_output = format!("{stdout_text}\n{stderr_text}");
-    let log_file_path = config.project_dir.join(format!("{root_stem}.log"));
+    let hidden_log = out_dir.join(format!("{root_stem}.log"));
+    let root_log = config.project_dir.join(format!("{root_stem}.log"));
+    let log_file_path = if hidden_log.exists() {
+        hidden_log
+    } else {
+        root_log
+    };
     if log_file_path.exists()
         && let Ok(file_log) = std::fs::read_to_string(&log_file_path)
     {
         log_output = file_log;
     }
 
-    let synctex_path = if expected_synctex_gz.exists() {
-        Some(expected_synctex_gz)
-    } else if expected_synctex.exists() {
-        Some(expected_synctex)
+    // PDF location: check .leafforge first, fallback to root
+    let hidden_pdf = out_dir.join(format!("{root_stem}.pdf"));
+    let root_pdf = config.project_dir.join(format!("{root_stem}.pdf"));
+    let expected_pdf = if hidden_pdf.exists() {
+        // Clean up legacy PDF in project root if present from earlier builds
+        if root_pdf.exists() && root_pdf != hidden_pdf {
+            let _ = std::fs::remove_file(&root_pdf);
+        }
+        hidden_pdf
+    } else {
+        root_pdf
+    };
+
+    // Clean up residual auxiliary files in project root if they now exist in .leafforge
+    let residual_exts = ["aux", "log", "synctex.gz", "synctex", "fls", "fdb_latexmk", "out"];
+    for ext in residual_exts {
+        let legacy_file = config.project_dir.join(format!("{root_stem}.{ext}"));
+        let new_file = out_dir.join(format!("{root_stem}.{ext}"));
+        if new_file.exists() && legacy_file.exists() {
+            let _ = std::fs::remove_file(&legacy_file);
+        }
+    }
+
+    // SyncTeX location: check .leafforge first, fallback to root
+    let hidden_synctex_gz = out_dir.join(format!("{root_stem}.synctex.gz"));
+    let hidden_synctex = out_dir.join(format!("{root_stem}.synctex"));
+    let root_synctex_gz = config.project_dir.join(format!("{root_stem}.synctex.gz"));
+    let root_synctex = config.project_dir.join(format!("{root_stem}.synctex"));
+
+    let synctex_path = if hidden_synctex_gz.exists() {
+        Some(hidden_synctex_gz)
+    } else if hidden_synctex.exists() {
+        Some(hidden_synctex)
+    } else if root_synctex_gz.exists() {
+        Some(root_synctex_gz)
+    } else if root_synctex.exists() {
+        Some(root_synctex)
     } else {
         None
     };
@@ -591,5 +650,33 @@ Content here
         assert!(main_synctex.exists());
         assert!(!main_aux.exists());
         assert!(!main_log.exists());
+    }
+
+    #[test]
+    fn test_clean_auxiliary_files_in_hidden_leafforge_dir() {
+        let dir = tempdir().expect("tempdir");
+        let hidden = dir.path().join(".leafforge");
+        std::fs::create_dir_all(&hidden).unwrap();
+
+        let hidden_aux = hidden.join("main.aux");
+        let hidden_log = hidden.join("main.log");
+        let hidden_pdf = hidden.join("main.pdf");
+        std::fs::write(&hidden_aux, "aux data").unwrap();
+        std::fs::write(&hidden_log, "log data").unwrap();
+        std::fs::write(&hidden_pdf, "pdf data").unwrap();
+
+        let removed = clean_auxiliary_files(dir.path(), "main.tex").expect("clean ok");
+        assert!(removed.contains(&"main.aux".to_string()));
+        assert!(removed.contains(&"main.log".to_string()));
+        assert!(!hidden_aux.exists());
+        assert!(!hidden_log.exists());
+        assert!(hidden_pdf.exists());
+    }
+
+    #[test]
+    fn test_preamble_cache_path() {
+        let dir = PathBuf::from("/fake/project");
+        let p = get_preamble_cache_path(&dir, "abcdef");
+        assert_eq!(p, PathBuf::from("/fake/project/.leafforge/preamble_abcdef.fmt"));
     }
 }

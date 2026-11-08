@@ -86,8 +86,15 @@ impl AppLogger {
 
     /// Sets or appends to a project-specific log file when a workspace is opened
     pub fn set_workspace_path(&self, workspace_path: &Path) {
-        let cache_dir = workspace_path.join(".leafforge-cache");
+        let cache_dir = workspace_path.join(".leafforge");
         let _ = create_dir_all(&cache_dir);
+        #[cfg(windows)]
+        {
+            let _ = std::process::Command::new("attrib")
+                .arg("+h")
+                .arg(&cache_dir)
+                .output();
+        }
         let workspace_log = cache_dir.join("leafforge.log");
         if let Ok(mut lock) = self.log_file_path.lock() {
             *lock = workspace_log;
@@ -223,7 +230,7 @@ mod tests {
         assert_eq!(entries[1].level, "INFO");
 
         // Verify file was written
-        let log_file = dir.path().join(".leafforge-cache").join("leafforge.log");
+        let log_file = dir.path().join(".leafforge").join("leafforge.log");
         assert!(log_file.exists());
         let content = std::fs::read_to_string(&log_file).unwrap();
         assert!(content.contains("[INFO] [TestTarget] Testing info log"));

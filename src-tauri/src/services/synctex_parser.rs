@@ -322,6 +322,19 @@ pub fn resolve_synctex_path(project_dir: &Path, root_filename: &str) -> Option<P
         .and_then(|s| s.to_str())
         .unwrap_or("main");
 
+    // Check .leafforge hidden output folder first
+    let hidden_dir = project_dir.join(".leafforge");
+    let gz_hidden = hidden_dir.join(format!("{stem}.synctex.gz"));
+    if gz_hidden.exists() {
+        return Some(gz_hidden);
+    }
+
+    let uncompressed_hidden = hidden_dir.join(format!("{stem}.synctex"));
+    if uncompressed_hidden.exists() {
+        return Some(uncompressed_hidden);
+    }
+
+    // Fallback to project root
     let gz_path = project_dir.join(format!("{stem}.synctex.gz"));
     if gz_path.exists() {
         return Some(gz_path);

@@ -29,6 +29,7 @@ pub fn should_ignore_path(path: &Path) -> bool {
         || s.contains("target")
         || s.contains("dist")
         || s.contains(".vite")
+        || s.contains(".leafforge")
         || s.contains(".leafforge-cache")
         || s.contains(".tmp_")
         || s.ends_with(".tmp")
