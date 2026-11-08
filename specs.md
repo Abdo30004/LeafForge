@@ -397,9 +397,9 @@ Execute the build strictly in the 6 phases below. At the end of every step, run 
   - *Commit:* `feat(git-ui): build git staging sidebar, diff inspector, and github repo cloner`
 
 ### Phase 5: Yjs Live Collaboration, GitHub Permission Gate & CRDT-to-Git Reconciler
-- [ ] **Step 5.1:** Implement `collabManager.ts` integrating `Y.Doc`, `y-codemirror.next`, `y-indexeddb`, and `y-webrtc` / `y-websocket`, gated by `verify_repo_collaborator` against the GitHub Collaborators API.
+- [x] **Step 5.1:** Implement `collabManager.ts` integrating `Y.Doc`, `y-codemirror.next`, `y-indexeddb`, and `y-webrtc` / `y-websocket`, gated by `verify_repo_collaborator` against the GitHub Collaborators API.
   - *Commit:* `feat(collab): integrate yjs crdt binding, awareness cursors, and github permission gate`
-- [ ] **Step 5.2:** Implement Designated Committer election and `gitCrdtBridge.ts` (3-way reconciliation between `HEAD`, live `Y.Text`, and incoming `git fetch` commits) + `ConflictModal.tsx` and `CollabPanel.tsx` (with Follow Peer mode).
+- [x] **Step 5.2:** Implement Designated Committer election and `gitCrdtBridge.ts` (3-way reconciliation between `HEAD`, live `Y.Text`, and incoming `git fetch` commits) + `ConflictModal.tsx` and `CollabPanel.tsx` (with Follow Peer mode).
   - *Commit:* `feat(reconciler): implement designated committer election and 3-way crdt-to-git bridge`
 
 ### Phase 6: LSP Integration (`TexLab`), Command Palette & End-to-End Verification
