@@ -2,11 +2,11 @@ use crate::error::{AppError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{Mutex, mpsc, oneshot};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LspStatusResponse {
@@ -88,7 +88,9 @@ impl LspSupervisor {
                     });
                 }
                 Err(err) => {
-                    eprintln!("Failed to spawn native texlab daemon: {err}. Falling back to embedded LSP engine.");
+                    eprintln!(
+                        "Failed to spawn native texlab daemon: {err}. Falling back to embedded LSP engine."
+                    );
                 }
             }
         }
@@ -98,7 +100,9 @@ impl LspSupervisor {
             running: true,
             server: "Embedded TeX Language Service".to_string(),
             binary_found: false,
-            message: "Operating with high-speed built-in LaTeX completion and macro analysis engine".to_string(),
+            message:
+                "Operating with high-speed built-in LaTeX completion and macro analysis engine"
+                    .to_string(),
         })
     }
 
@@ -206,7 +210,9 @@ impl LspSupervisor {
         });
 
         let _ = self.send_request("initialize", init_params).await;
-        let _ = self.send_notification("initialized", serde_json::json!({})).await;
+        let _ = self
+            .send_notification("initialized", serde_json::json!({}))
+            .await;
 
         Ok(())
     }
@@ -272,7 +278,9 @@ impl LspSupervisor {
 
         match tokio::time::timeout(std::time::Duration::from_millis(1500), resp_rx).await {
             Ok(Ok(val)) => Ok(val),
-            Ok(Err(_)) => Err(AppError::Lsp("LSP channel dropped before response".to_string())),
+            Ok(Err(_)) => Err(AppError::Lsp(
+                "LSP channel dropped before response".to_string(),
+            )),
             Err(_) => {
                 let mut map = self.pending_responses.lock().await;
                 map.remove(&req_id);
@@ -281,11 +289,7 @@ impl LspSupervisor {
         }
     }
 
-    pub async fn send_notification(
-        &self,
-        method: &str,
-        params: serde_json::Value,
-    ) -> Result<()> {
+    pub async fn send_notification(&self, method: &str, params: serde_json::Value) -> Result<()> {
         let tx = match &self.stdin_tx {
             Some(t) => t,
             None => return Ok(()),
@@ -334,7 +338,9 @@ impl LspSupervisor {
                 },
                 "contentChanges": [{ "text": text }]
             });
-            let _ = self.send_notification("textDocument/didChange", params).await;
+            let _ = self
+                .send_notification("textDocument/didChange", params)
+                .await;
         }
 
         Ok(())
@@ -361,39 +367,42 @@ impl LspSupervisor {
                     }
                 })
             {
-                    let parsed: Vec<CompletionItem> = items
-                        .into_iter()
-                        .filter_map(|it| {
-                            let label = it.get("label")?.as_str()?.to_string();
-                            let kind = it.get("kind").map(|k| format!("{:?}", k));
-                            let detail = it.get("detail").and_then(|d| d.as_str()).map(|s| s.to_string());
-                            let documentation = it
-                                .get("documentation")
-                                .and_then(|d| {
-                                    if let Some(s) = d.as_str() {
-                                        Some(s.to_string())
-                                    } else {
-                                        d.get("value").and_then(|v| v.as_str()).map(|s| s.to_string())
-                                    }
-                                });
-                            let insert_text = it
-                                .get("insertText")
-                                .and_then(|s| s.as_str())
-                                .map(|s| s.to_string());
+                let parsed: Vec<CompletionItem> = items
+                    .into_iter()
+                    .filter_map(|it| {
+                        let label = it.get("label")?.as_str()?.to_string();
+                        let kind = it.get("kind").map(|k| format!("{:?}", k));
+                        let detail = it
+                            .get("detail")
+                            .and_then(|d| d.as_str())
+                            .map(|s| s.to_string());
+                        let documentation = it.get("documentation").and_then(|d| {
+                            if let Some(s) = d.as_str() {
+                                Some(s.to_string())
+                            } else {
+                                d.get("value")
+                                    .and_then(|v| v.as_str())
+                                    .map(|s| s.to_string())
+                            }
+                        });
+                        let insert_text = it
+                            .get("insertText")
+                            .and_then(|s| s.as_str())
+                            .map(|s| s.to_string());
 
-                            Some(CompletionItem {
-                                label,
-                                kind,
-                                detail,
-                                documentation,
-                                insert_text,
-                            })
+                        Some(CompletionItem {
+                            label,
+                            kind,
+                            detail,
+                            documentation,
+                            insert_text,
                         })
-                        .collect();
+                    })
+                    .collect();
 
-                    if !parsed.is_empty() {
-                        return Ok(parsed);
-                    }
+                if !parsed.is_empty() {
+                    return Ok(parsed);
+                }
             }
         }
 
@@ -456,7 +465,11 @@ impl LspSupervisor {
 
         // 2. Reference label completion (\ref{... or \eqref{...)
         if let Some(idx) = prefix.rfind("\\ref{").or_else(|| prefix.rfind("\\eqref{")) {
-            let brace_offset = if prefix[idx..].starts_with("\\eqref{") { 7 } else { 5 };
+            let brace_offset = if prefix[idx..].starts_with("\\eqref{") {
+                7
+            } else {
+                5
+            };
             let after_brace = &prefix[idx + brace_offset..];
             if !after_brace.contains('}') {
                 return self.extract_document_labels();
@@ -465,7 +478,11 @@ impl LspSupervisor {
 
         // 3. Environment completion (\begin{... or \end{...)
         if let Some(idx) = prefix.rfind("\\begin{").or_else(|| prefix.rfind("\\end{")) {
-            let brace_offset = if prefix[idx..].starts_with("\\begin{") { 7 } else { 5 };
+            let brace_offset = if prefix[idx..].starts_with("\\begin{") {
+                7
+            } else {
+                5
+            };
             let after_brace = &prefix[idx + brace_offset..];
             if !after_brace.contains('}') {
                 return self.get_standard_environments();
@@ -561,7 +578,9 @@ impl LspSupervisor {
                     label: "lamport1994latex".to_string(),
                     kind: Some("Citation".to_string()),
                     detail: Some("@book".to_string()),
-                    documentation: Some("Leslie Lamport, LaTeX: A Document Preparation System (1994)".to_string()),
+                    documentation: Some(
+                        "Leslie Lamport, LaTeX: A Document Preparation System (1994)".to_string(),
+                    ),
                     insert_text: Some("lamport1994latex".to_string()),
                 },
             ]
@@ -584,7 +603,9 @@ impl LspSupervisor {
                             label: key.to_string(),
                             kind: Some("Reference".to_string()),
                             detail: Some("Label target".to_string()),
-                            documentation: Some(format!("Cross-reference label: `\\label{{{key}}}`")),
+                            documentation: Some(format!(
+                                "Cross-reference label: `\\label{{{key}}}`"
+                            )),
                             insert_text: Some(key.to_string()),
                         });
                         cursor = &rest[end + 1..];
@@ -641,7 +662,9 @@ impl LspSupervisor {
             label: name.to_string(),
             kind: Some("Environment".to_string()),
             detail: Some(desc.to_string()),
-            documentation: Some(format!("LaTeX environment: `\\begin{{{name}}} ... \\end{{{name}}}`")),
+            documentation: Some(format!(
+                "LaTeX environment: `\\begin{{{name}}} ... \\end{{{name}}}`"
+            )),
             insert_text: Some(name.to_string()),
         })
         .collect()
@@ -651,16 +674,31 @@ impl LspSupervisor {
         vec![
             ("amsmath", "AMS mathematical enhancements and environments"),
             ("amssymb", "Extended mathematical symbol collection"),
-            ("graphicx", "Inclusion of external graphics (.png, .pdf, .eps)"),
+            (
+                "graphicx",
+                "Inclusion of external graphics (.png, .pdf, .eps)",
+            ),
             ("hyperref", "Hypertext cross-references and URL links"),
             ("xcolor", "Driver-independent color extensions"),
             ("geometry", "Custom page margins, orientation, and layout"),
             ("biblatex", "Modern citation and bibliography management"),
-            ("booktabs", "Publication quality tables with \\toprule, \\midrule"),
+            (
+                "booktabs",
+                "Publication quality tables with \\toprule, \\midrule",
+            ),
             ("tikz", "Programmable vector graphics engine"),
-            ("babel", "Multilingual typesetting (supports Arabic & Hebrew)"),
-            ("fontspec", "Advanced OpenType and TrueType font selection (XeTeX/LuaTeX)"),
-            ("microtype", "Subliminal typographic adjustments and font expansion"),
+            (
+                "babel",
+                "Multilingual typesetting (supports Arabic & Hebrew)",
+            ),
+            (
+                "fontspec",
+                "Advanced OpenType and TrueType font selection (XeTeX/LuaTeX)",
+            ),
+            (
+                "microtype",
+                "Subliminal typographic adjustments and font expansion",
+            ),
         ]
         .into_iter()
         .map(|(pkg, desc)| CompletionItem {
@@ -675,25 +713,81 @@ impl LspSupervisor {
 
     fn get_standard_latex_commands(&self) -> Vec<CompletionItem> {
         vec![
-            ("\\section", "Top-level section heading", "\\section{${1:Title}}"),
-            ("\\subsection", "Second-level section heading", "\\subsection{${1:Title}}"),
-            ("\\subsubsection", "Third-level section heading", "\\subsubsection{${1:Title}}"),
-            ("\\chapter", "Book or report chapter", "\\chapter{${1:Title}}"),
-            ("\\part", "High-level document division", "\\part{${1:Title}}"),
+            (
+                "\\section",
+                "Top-level section heading",
+                "\\section{${1:Title}}",
+            ),
+            (
+                "\\subsection",
+                "Second-level section heading",
+                "\\subsection{${1:Title}}",
+            ),
+            (
+                "\\subsubsection",
+                "Third-level section heading",
+                "\\subsubsection{${1:Title}}",
+            ),
+            (
+                "\\chapter",
+                "Book or report chapter",
+                "\\chapter{${1:Title}}",
+            ),
+            (
+                "\\part",
+                "High-level document division",
+                "\\part{${1:Title}}",
+            ),
             ("\\textbf", "Bold font weight", "\\textbf{${1:text}}"),
             ("\\textit", "Italic font slant", "\\textit{${1:text}}"),
-            ("\\texttt", "Monospace typewriter font", "\\texttt{${1:code}}"),
-            ("\\underline", "Underlined text span", "\\underline{${1:text}}"),
+            (
+                "\\texttt",
+                "Monospace typewriter font",
+                "\\texttt{${1:code}}",
+            ),
+            (
+                "\\underline",
+                "Underlined text span",
+                "\\underline{${1:text}}",
+            ),
             ("\\cite", "Citation reference", "\\cite{${1:key}}"),
             ("\\ref", "Cross-reference target", "\\ref{${1:label}}"),
-            ("\\eqref", "Parenthesized equation reference", "\\eqref{${1:label}}"),
-            ("\\label", "Anchor label for cross-referencing", "\\label{${1:marker}}"),
-            ("\\begin", "Open LaTeX environment", "\\begin{${1:environment}}\n\t$0\n\\end{${1:environment}}"),
-            ("\\end", "Close LaTeX environment", "\\end{${1:environment}}"),
-            ("\\frac", "Mathematical fraction", "\\frac{${1:num}}{${2:den}}"),
+            (
+                "\\eqref",
+                "Parenthesized equation reference",
+                "\\eqref{${1:label}}",
+            ),
+            (
+                "\\label",
+                "Anchor label for cross-referencing",
+                "\\label{${1:marker}}",
+            ),
+            (
+                "\\begin",
+                "Open LaTeX environment",
+                "\\begin{${1:environment}}\n\t$0\n\\end{${1:environment}}",
+            ),
+            (
+                "\\end",
+                "Close LaTeX environment",
+                "\\end{${1:environment}}",
+            ),
+            (
+                "\\frac",
+                "Mathematical fraction",
+                "\\frac{${1:num}}{${2:den}}",
+            ),
             ("\\sqrt", "Square root radical", "\\sqrt{${1:expr}}"),
-            ("\\sum", "Summation operator (\\sum_{i=1}^n)", "\\sum_{${1:i=1}}^{${2:n}}"),
-            ("\\int", "Integral operator (\\int_a^b)", "\\int_{${1:a}}^{${2:b}}"),
+            (
+                "\\sum",
+                "Summation operator (\\sum_{i=1}^n)",
+                "\\sum_{${1:i=1}}^{${2:n}}",
+            ),
+            (
+                "\\int",
+                "Integral operator (\\int_a^b)",
+                "\\int_{${1:a}}^{${2:b}}",
+            ),
             ("\\alpha", "Greek lowercase alpha (α)", "\\alpha"),
             ("\\beta", "Greek lowercase beta (β)", "\\beta"),
             ("\\gamma", "Greek lowercase gamma (γ)", "\\gamma"),
@@ -721,14 +815,28 @@ impl LspSupervisor {
 
     fn lookup_macro_documentation(&self, token: &str) -> Option<String> {
         let docs = match token {
-            "\\section" => "**\\section{Title}**\n\nCreates a major numbered section heading. Appears in the table of contents.",
-            "\\subsection" => "**\\subsection{Title}**\n\nCreates a subordinate numbered subsection.",
-            "\\textbf" => "**\\textbf{text}**\n\nRenders the argument text in **boldface** typography.",
+            "\\section" => {
+                "**\\section{Title}**\n\nCreates a major numbered section heading. Appears in the table of contents."
+            }
+            "\\subsection" => {
+                "**\\subsection{Title}**\n\nCreates a subordinate numbered subsection."
+            }
+            "\\textbf" => {
+                "**\\textbf{text}**\n\nRenders the argument text in **boldface** typography."
+            }
             "\\textit" => "**\\textit{text}**\n\nRenders the argument text in *italic* font slant.",
-            "\\frac" => "**\\frac{numerator}{denominator}**\n\nRenders a two-story mathematical fraction:\n$$\\frac{a}{b}$$",
-            "\\sqrt" => "**\\sqrt[n]{x}**\n\nRenders a radical sign over the argument:\n$$\\sqrt{x}$$",
-            "\\cite" => "**\\cite{key}**\n\nInserts a citation reference targeting a BibTeX key from the project's `.bib` bibliography.",
-            "\\ref" => "**\\ref{label}**\n\nInserts a cross-reference number corresponding to the matching `\\label{...}` tag.",
+            "\\frac" => {
+                "**\\frac{numerator}{denominator}**\n\nRenders a two-story mathematical fraction:\n$$\\frac{a}{b}$$"
+            }
+            "\\sqrt" => {
+                "**\\sqrt[n]{x}**\n\nRenders a radical sign over the argument:\n$$\\sqrt{x}$$"
+            }
+            "\\cite" => {
+                "**\\cite{key}**\n\nInserts a citation reference targeting a BibTeX key from the project's `.bib` bibliography."
+            }
+            "\\ref" => {
+                "**\\ref{label}**\n\nInserts a cross-reference number corresponding to the matching `\\label{...}` tag."
+            }
             "\\alpha" => "**\\alpha**\n\nGreek lowercase letter alpha:\n$$\\alpha$$",
             "\\beta" => "**\\beta**\n\nGreek lowercase letter beta:\n$$\\beta$$",
             "\\sum" => "**\\sum**\n\nSummation operator:\n$$\\sum_{i=1}^{n} x_i$$",

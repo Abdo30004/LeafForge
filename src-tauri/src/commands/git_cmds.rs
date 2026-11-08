@@ -97,11 +97,7 @@ pub async fn git_commit(
 }
 
 #[tauri::command]
-pub async fn git_clone(
-    url: String,
-    target_path: String,
-    branch: Option<String>,
-) -> Result<()> {
+pub async fn git_clone(url: String, target_path: String, branch: Option<String>) -> Result<()> {
     tokio::task::spawn_blocking(move || {
         let path = PathBuf::from(&target_path);
         GitEngine::clone_repo(&url, &path, branch.as_deref())

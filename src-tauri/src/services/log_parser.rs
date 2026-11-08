@@ -116,7 +116,10 @@ pub fn parse_latex_log(
         // 2. Track file stack from parentheses
         track_file_stack(line, &mut file_stack, project_dir);
 
-        let current_file = file_stack.last().cloned().unwrap_or_else(|| default_file.clone());
+        let current_file = file_stack
+            .last()
+            .cloned()
+            .unwrap_or_else(|| default_file.clone());
 
         // 3. Traditional LaTeX Errors starting with "! "
         if line.starts_with("! ") {
@@ -179,7 +182,10 @@ pub fn parse_latex_log(
                 let mut j = i + 1;
                 while j < total_lines && j <= i + 3 {
                     let next_line = lines[j].trim_end();
-                    if next_line.is_empty() || next_line.starts_with("! ") || next_line.starts_with("LaTeX Warning") {
+                    if next_line.is_empty()
+                        || next_line.starts_with("! ")
+                        || next_line.starts_with("LaTeX Warning")
+                    {
                         break;
                     }
                     snippet_lines.push(next_line);
@@ -346,8 +352,14 @@ Underfull \vbox (badness 10000) has occurred while \output is active [1]
 
     #[test]
     fn test_normalize_file_path() {
-        assert_eq!(normalize_file_path("./sections/intro.tex", None), "sections/intro.tex");
-        assert_eq!(normalize_file_path("\"sections\\ch1.tex\"", None), "sections/ch1.tex");
+        assert_eq!(
+            normalize_file_path("./sections/intro.tex", None),
+            "sections/intro.tex"
+        );
+        assert_eq!(
+            normalize_file_path("\"sections\\ch1.tex\"", None),
+            "sections/ch1.tex"
+        );
     }
 
     #[test]

@@ -18,9 +18,8 @@ static MAGIC_PROGRAM_REGEX: LazyLock<Regex> = LazyLock::new(|| {
         .expect("valid regex")
 });
 
-static MAGIC_ROOT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)%\s*!TEX\s+root\s*=\s*([^\r\n]+)").expect("valid regex")
-});
+static MAGIC_ROOT_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)%\s*!TEX\s+root\s*=\s*([^\r\n]+)").expect("valid regex"));
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -147,10 +146,8 @@ pub fn calculate_preamble_hash(project_dir: &Path, preamble: &str) -> String {
                         && let Ok(mtime) = metadata.modified()
                         && let Ok(duration) = mtime.duration_since(std::time::UNIX_EPOCH)
                     {
-                        package_files.push((
-                            path.to_string_lossy().to_string(),
-                            duration.as_secs(),
-                        ));
+                        package_files
+                            .push((path.to_string_lossy().to_string(), duration.as_secs()));
                     }
                 }
                 _ => {}
@@ -203,8 +200,23 @@ pub fn find_binary_on_system(binary_name: &str) -> Option<PathBuf> {
             PathBuf::from(r"C:\texlive\2022\bin\win32"),
         ];
         if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-            paths.push(PathBuf::from(local_app_data).join("Programs").join("MiKTeX").join("miktex").join("bin").join("x64"));
-            paths.push(PathBuf::from(std::env::var("CARGO_HOME").unwrap_or_else(|_| format!(r"{}\.cargo", std::env::var("USERPROFILE").unwrap_or_default()))).join("bin"));
+            paths.push(
+                PathBuf::from(local_app_data)
+                    .join("Programs")
+                    .join("MiKTeX")
+                    .join("miktex")
+                    .join("bin")
+                    .join("x64"),
+            );
+            paths.push(
+                PathBuf::from(std::env::var("CARGO_HOME").unwrap_or_else(|_| {
+                    format!(
+                        r"{}\.cargo",
+                        std::env::var("USERPROFILE").unwrap_or_default()
+                    )
+                }))
+                .join("bin"),
+            );
         }
         paths
     } else {
@@ -280,8 +292,20 @@ pub fn clean_auxiliary_files(project_dir: &Path, root_filename: &str) -> Result<
         .unwrap_or("main");
 
     let aux_extensions: HashSet<&str> = [
-        "aux", "log", "out", "fls", "fdb_latexmk", "toc", "lof", "lot", "bbl", "blg", "nav",
-        "snm", "vrb", "synctex(busy)",
+        "aux",
+        "log",
+        "out",
+        "fls",
+        "fdb_latexmk",
+        "toc",
+        "lof",
+        "lot",
+        "bbl",
+        "blg",
+        "nav",
+        "snm",
+        "vrb",
+        "synctex(busy)",
     ]
     .into_iter()
     .collect();
@@ -381,7 +405,10 @@ pub async fn execute_compilation(
     }
 
     let mut child = cmd.spawn().map_err(|e| {
-        AppError::Compiler(format!("Failed to spawn {}: {e}", config.engine.binary_name()))
+        AppError::Compiler(format!(
+            "Failed to spawn {}: {e}",
+            config.engine.binary_name()
+        ))
     })?;
 
     let child_stdout = child.stdout.take();

@@ -1,7 +1,7 @@
 use crate::error::{AppError, Result};
 use crate::services::github_auth::{
-    AuthStatusResponse, CollaboratorPermission, DeviceCodeResponse, GithubAuthService,
-    GithubUserProfile, PollTokenResponse, DEFAULT_CLIENT_ID,
+    AuthStatusResponse, CollaboratorPermission, DEFAULT_CLIENT_ID, DeviceCodeResponse,
+    GithubAuthService, GithubUserProfile, PollTokenResponse,
 };
 use std::path::PathBuf;
 

@@ -1,6 +1,6 @@
 use crate::error::{AppError, Result};
 use crate::services::synctex_parser::{
-    load_synctex_file, resolve_synctex_path, SyncTexCoordinate, SyncTexInverseResult,
+    SyncTexCoordinate, SyncTexInverseResult, load_synctex_file, resolve_synctex_path,
 };
 use std::path::PathBuf;
 
@@ -18,7 +18,9 @@ pub async fn synctex_forward(
     }
 
     let synctex_path = resolve_synctex_path(&p_dir, &root_file).ok_or_else(|| {
-        AppError::SyncTex(format!("No .synctex.gz or .synctex file found for {root_file}"))
+        AppError::SyncTex(format!(
+            "No .synctex.gz or .synctex file found for {root_file}"
+        ))
     })?;
 
     let synctex_data = tokio::task::spawn_blocking(move || load_synctex_file(&synctex_path))
@@ -42,7 +44,9 @@ pub async fn synctex_inverse(
     }
 
     let synctex_path = resolve_synctex_path(&p_dir, &root_file).ok_or_else(|| {
-        AppError::SyncTex(format!("No .synctex.gz or .synctex file found for {root_file}"))
+        AppError::SyncTex(format!(
+            "No .synctex.gz or .synctex file found for {root_file}"
+        ))
     })?;
 
     let synctex_data = tokio::task::spawn_blocking(move || load_synctex_file(&synctex_path))

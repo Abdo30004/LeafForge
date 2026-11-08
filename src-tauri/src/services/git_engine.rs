@@ -1,8 +1,8 @@
 use crate::error::{AppError, Result};
 use crate::services::github_auth::GithubAuthService;
 use git2::{
-    build::RepoBuilder, Cred, DiffFormat, DiffOptions, FetchOptions, IndexAddOption,
-    MergeOptions, PushOptions, RemoteCallbacks, Repository, Signature, StatusOptions,
+    Cred, DiffFormat, DiffOptions, FetchOptions, IndexAddOption, MergeOptions, PushOptions,
+    RemoteCallbacks, Repository, Signature, StatusOptions, build::RepoBuilder,
 };
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -110,7 +110,9 @@ impl GitEngine {
         if let Some((a, b)) = (|| -> Option<(usize, usize)> {
             let head_ref = repo.head().ok()?;
             let branch_name = head_ref.shorthand()?;
-            let local_branch = repo.find_branch(branch_name, git2::BranchType::Local).ok()?;
+            let local_branch = repo
+                .find_branch(branch_name, git2::BranchType::Local)
+                .ok()?;
             let upstream = local_branch.upstream().ok()?;
             let local_oid = local_branch.get().target()?;
             let upstream_oid = upstream.get().target()?;
@@ -300,8 +302,12 @@ impl GitEngine {
 
         let diff = if staged {
             let head_tree = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
-            repo.diff_tree_to_index(head_tree.as_ref(), Some(&repo.index().map_err(|e| AppError::Git(e.to_string()))?), Some(&mut diff_opts))
-                .map_err(|e| AppError::Git(format!("Staged diff failed: {e}")))?
+            repo.diff_tree_to_index(
+                head_tree.as_ref(),
+                Some(&repo.index().map_err(|e| AppError::Git(e.to_string()))?),
+                Some(&mut diff_opts),
+            )
+            .map_err(|e| AppError::Git(format!("Staged diff failed: {e}")))?
         } else {
             repo.diff_index_to_workdir(None, Some(&mut diff_opts))
                 .map_err(|e| AppError::Git(format!("Working tree diff failed: {e}")))?
@@ -450,8 +456,12 @@ impl GitEngine {
             });
         }
 
-        let tree_id = index.write_tree().map_err(|e| AppError::Git(e.to_string()))?;
-        let tree = repo.find_tree(tree_id).map_err(|e| AppError::Git(e.to_string()))?;
+        let tree_id = index
+            .write_tree()
+            .map_err(|e| AppError::Git(e.to_string()))?;
+        let tree = repo
+            .find_tree(tree_id)
+            .map_err(|e| AppError::Git(e.to_string()))?;
         let head_commit = repo.head().unwrap().peel_to_commit().unwrap();
         let remote_commit = repo.find_commit(fetch_commit.id()).unwrap();
 
@@ -468,7 +478,8 @@ impl GitEngine {
             )
             .map_err(|e| AppError::Git(format!("Merge commit failed: {e}")))?;
 
-        repo.cleanup_state().map_err(|e| AppError::Git(e.to_string()))?;
+        repo.cleanup_state()
+            .map_err(|e| AppError::Git(e.to_string()))?;
 
         Ok(PullResult {
             success: true,
@@ -534,11 +545,7 @@ impl GitEngine {
 
     /// 3-Way CRDT-to-Git Reconciliation Algorithm (Subsystem B.3)
     /// Merges (S_base, S_crdt, S_remote)
-    pub fn reconcile_3way(
-        base: &str,
-        crdt: &str,
-        remote: &str,
-    ) -> Result<ReconcileResult> {
+    pub fn reconcile_3way(base: &str, crdt: &str, remote: &str) -> Result<ReconcileResult> {
         // Fast path 1: CRDT equals remote -> trivially clean
         if crdt == remote {
             return Ok(ReconcileResult {
@@ -658,7 +665,11 @@ mod tests {
 
         // Create a test file
         let file_path = path.join("main.tex");
-        std::fs::write(&file_path, "\\documentclass{article}\n\\begin{document}\nHello\n\\end{document}").unwrap();
+        std::fs::write(
+            &file_path,
+            "\\documentclass{article}\n\\begin{document}\nHello\n\\end{document}",
+        )
+        .unwrap();
 
         let status2 = GitEngine::get_status(path).expect("git status 2");
         assert!(!status2.is_clean);
@@ -681,7 +692,13 @@ mod tests {
 
         // Stage all and commit
         GitEngine::stage_all(path).expect("stage all");
-        let commit_oid = GitEngine::commit(path, "Initial commit", Some("Tester"), Some("test@example.com")).expect("commit");
+        let commit_oid = GitEngine::commit(
+            path,
+            "Initial commit",
+            Some("Tester"),
+            Some("test@example.com"),
+        )
+        .expect("commit");
         assert!(!commit_oid.is_empty());
 
         let status5 = GitEngine::get_status(path).expect("git status 5");
@@ -742,11 +759,18 @@ mod tests {
 
     #[test]
     fn test_git_get_remote_url() {
-        let tmp = std::env::temp_dir().join(format!("lf_remote_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let tmp = std::env::temp_dir().join(format!(
+            "lf_remote_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         std::fs::create_dir_all(&tmp).unwrap();
         let repo = Repository::init(&tmp).unwrap();
         assert!(GitEngine::get_remote_url(&tmp, None).unwrap().is_none());
-        repo.remote("origin", "https://github.com/alice/paper.git").unwrap();
+        repo.remote("origin", "https://github.com/alice/paper.git")
+            .unwrap();
         let url = GitEngine::get_remote_url(&tmp, None).unwrap();
         assert_eq!(url.as_deref(), Some("https://github.com/alice/paper.git"));
         let _ = std::fs::remove_dir_all(&tmp);

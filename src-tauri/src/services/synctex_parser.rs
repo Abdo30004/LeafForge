@@ -136,7 +136,12 @@ impl SyncTexData {
         data
     }
 
-    pub fn forward_search(&self, file_target: &str, target_line: u32, _target_col: u32) -> Option<SyncTexCoordinate> {
+    pub fn forward_search(
+        &self,
+        file_target: &str,
+        target_line: u32,
+        _target_col: u32,
+    ) -> Option<SyncTexCoordinate> {
         let normalized_target = file_target.replace('\\', "/");
         let target_filename = Path::new(&normalized_target)
             .file_name()
@@ -175,8 +180,16 @@ impl SyncTexData {
         candidates.sort_by_key(|r| (r.line as i64 - target_line as i64).abs());
 
         let best = candidates.first()?;
-        let width = if best.width_pt > 5.0 { best.width_pt } else { 120.0 };
-        let height = if best.height_pt > 5.0 { best.height_pt } else { 16.0 };
+        let width = if best.width_pt > 5.0 {
+            best.width_pt
+        } else {
+            120.0
+        };
+        let height = if best.height_pt > 5.0 {
+            best.height_pt
+        } else {
+            16.0
+        };
 
         Some(SyncTexCoordinate {
             page: best.page,
@@ -187,12 +200,14 @@ impl SyncTexData {
         })
     }
 
-    pub fn inverse_search(&self, page: u32, x_pdf: f64, y_pdf: f64) -> Option<SyncTexInverseResult> {
-        let page_records: Vec<&SyncRecord> = self
-            .records
-            .iter()
-            .filter(|r| r.page == page)
-            .collect();
+    pub fn inverse_search(
+        &self,
+        page: u32,
+        x_pdf: f64,
+        y_pdf: f64,
+    ) -> Option<SyncTexInverseResult> {
+        let page_records: Vec<&SyncRecord> =
+            self.records.iter().filter(|r| r.page == page).collect();
 
         if page_records.is_empty() {
             return None;
@@ -359,7 +374,9 @@ k1,5,1:6553600,13107200:655360
         assert!(coord.x > 0.0);
         assert!(coord.y > 0.0);
 
-        let coord2 = data.forward_search("sections/intro.tex", 12, 1).expect("intro coord");
+        let coord2 = data
+            .forward_search("sections/intro.tex", 12, 1)
+            .expect("intro coord");
         assert_eq!(coord2.page, 1);
     }
 
@@ -368,7 +385,9 @@ k1,5,1:6553600,13107200:655360
         let data = SyncTexData::parse_str(SAMPLE_SYNCTEX);
         // Record 1 was at x ~ 100 pt, y ~ 200 pt
         let coord = data.forward_search("main.tex", 5, 1).unwrap();
-        let inv = data.inverse_search(1, coord.x + 2.0, coord.y + 2.0).expect("inverse match");
+        let inv = data
+            .inverse_search(1, coord.x + 2.0, coord.y + 2.0)
+            .expect("inverse match");
         assert_eq!(inv.file, "main.tex");
         assert_eq!(inv.line, 5);
     }

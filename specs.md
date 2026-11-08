@@ -416,6 +416,14 @@ Execute the build strictly in the 6 phases below. At the end of every step, run 
 - [x] **Step 7.5:** Author `./docs/README.md` index hub cross-linking all guides with system architecture topology and core guarantees.
   - *Commit:* `docs(suite): create comprehensive production-grade documentation suite`
 
+### Phase 8: GitHub Repository, CI/CD Pipeline & v0.6.0 Release
+- [x] **Step 8.1:** Initialize private GitHub repository `LeafForge` under authenticated account (`gh repo create LeafForge --private --source=. --remote=origin --push`).
+- [x] **Step 8.2:** Author comprehensive root `README.md` showcasing dual-mode CodeMirror 6 editor, UAX #9 BiDi/RTL support, hybrid Tectonic/TeX Live compiler pool, native libgit2 engine, and E2EE Yjs CRDT collaboration.
+- [x] **Step 8.3:** Implement GitHub Actions CI pipeline (`.github/workflows/ci.yml`) running `cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`, `pnpm run typecheck`, `pnpm run lint`, and `pnpm run test:run`.
+- [x] **Step 8.4:** Implement GitHub Actions release pipeline (`.github/workflows/release.yml`) using `tauri-apps/tauri-action` across Windows, macOS, and Linux matrices for `v*` tag triggers.
+- [x] **Step 8.5:** Commit workflows and README, push to `origin main`, and push `v0.6.0` release tag to trigger automated production release.
+  - *Commit:* `ci(release): setup github actions ci/cd workflows and root readme`
+
 ---
 
 ## 8. Verification & Definition of Done Checklist
@@ -430,3 +438,4 @@ Before marking the project complete, verify and check off every criterion below:
 - [x] **Auto-Compile & Flicker-Free PDF:** Saving or pausing typing for $400\text{ ms}$ triggers background compilation (`Tectonic`, `LuaLaTeX`, `XeLaTeX`, or `pdfLaTeX`), updates the PDF canvas via double-buffering with zero white flash, and supports two-way `Cmd/Ctrl+Click` SyncTeX jumping.
 - [x] **GitHub Device Auth & Git Sync:** User can authenticate via the 8-character GitHub Device Code, clone a repository, stage/commit/push changes via native `git2`, and reconcile external Git commits with live Yjs CRDT sessions without data loss.
 - [x] **Production Documentation Suite:** Complete, code-backed, cross-linked documentation suite generated in `./docs/` (`architecture.md`, `security.md`, `user-guide.md`, `developer-guide.md`, `README.md`).
+- [x] **CI/CD & Production Release:** GitHub Actions workflows (`ci.yml`, `release.yml`) active on GitHub with tag `v0.6.0` pushed and tracked.

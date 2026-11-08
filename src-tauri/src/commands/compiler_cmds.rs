@@ -1,10 +1,10 @@
 use crate::error::{AppError, Result};
 use crate::services::compiler_pipeline::{
+    CompilationConfig, DEFAULT_COMPILE_TIMEOUT_SECS, EngineInfo, LatexEngine, MagicComments,
     clean_auxiliary_files, detect_all_engines, execute_compilation,
-    parse_magic_comments_from_content, CompilationConfig, EngineInfo, LatexEngine, MagicComments,
-    DEFAULT_COMPILE_TIMEOUT_SECS,
+    parse_magic_comments_from_content,
 };
-use crate::services::log_parser::{parse_latex_log, LatexDiagnostic};
+use crate::services::log_parser::{LatexDiagnostic, parse_latex_log};
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -123,7 +123,10 @@ pub async fn compile_document(
     match compile_res {
         Ok((exit_code, log_output, pdf_path, synctex_path, duration)) => {
             let diagnostics = parse_latex_log(&log_output, &root_file, Some(&p_dir));
-            let has_errors = exit_code != 0 || diagnostics.iter().any(|d| d.severity == crate::services::log_parser::DiagnosticSeverity::Error);
+            let has_errors = exit_code != 0
+                || diagnostics
+                    .iter()
+                    .any(|d| d.severity == crate::services::log_parser::DiagnosticSeverity::Error);
             let pdf_str = if pdf_path.exists() {
                 Some(pdf_path.to_string_lossy().to_string())
             } else {
@@ -141,8 +144,6 @@ pub async fn compile_document(
                 log_output,
             })
         }
-        Err(err) => {
-            Err(err)
-        }
+        Err(err) => Err(err),
     }
 }

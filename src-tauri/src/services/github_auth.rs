@@ -173,10 +173,7 @@ impl GithubAuthService {
         let params = [
             ("client_id", client_id),
             ("device_code", device_code),
-            (
-                "grant_type",
-                "urn:ietf:params:oauth:grant-type:device_code",
-            ),
+            ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
         ];
 
         let response = client
@@ -296,8 +293,9 @@ impl GithubAuthService {
             .build()
             .map_err(|e| AppError::Auth(format!("Failed to build HTTP client: {e}")))?;
 
-        let url =
-            format!("https://api.github.com/repos/{owner}/{repo}/collaborators/{username}/permission");
+        let url = format!(
+            "https://api.github.com/repos/{owner}/{repo}/collaborators/{username}/permission"
+        );
 
         let response = client
             .get(&url)
@@ -306,7 +304,9 @@ impl GithubAuthService {
             .header(ACCEPT, "application/vnd.github+json")
             .send()
             .await
-            .map_err(|e| AppError::Auth(format!("Collaborator verification request failed: {e}")))?;
+            .map_err(|e| {
+                AppError::Auth(format!("Collaborator verification request failed: {e}"))
+            })?;
 
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(CollaboratorPermission {
