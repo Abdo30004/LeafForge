@@ -4,6 +4,7 @@ import {
   ListTree,
   GitBranch,
   Users,
+  Package,
   Settings,
 } from 'lucide-react';
 import { useWorkspaceStore, type SidebarTab } from '../../store/useWorkspaceStore';
@@ -19,6 +20,7 @@ const TABS: RailTabItem[] = [
   { id: 'outline', label: 'Document Outline', icon: ListTree },
   { id: 'git', label: 'Source Control (Git)', icon: GitBranch },
   { id: 'collab', label: 'Live Collaboration', icon: Users },
+  { id: 'packages', label: 'Compiler & Packages', icon: Package },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
@@ -40,7 +42,7 @@ export const ActivityRail: React.FC = () => {
     <aside className="w-[44px] bg-[var(--activity-rail-bg)] border-r border-[var(--border-subtle)] flex flex-col items-center py-2 shrink-0 z-20 select-none justify-between">
       {/* Top Main Navigation */}
       <div className="flex flex-col items-center space-y-1 w-full">
-        {TABS.slice(0, 4).map(({ id, label, icon: Icon }) => {
+        {TABS.slice(0, 5).map(({ id, label, icon: Icon }) => {
           const isActive = activeTab === id && !sidebarCollapsed;
           return (
             <button
@@ -64,7 +66,7 @@ export const ActivityRail: React.FC = () => {
 
       {/* Bottom Settings */}
       <div className="w-full flex justify-center pb-1">
-        {TABS.slice(4).map(({ id, label, icon: Icon }) => {
+        {TABS.slice(5).map(({ id, label, icon: Icon }) => {
           const isActive = activeTab === id && !sidebarCollapsed;
           return (
             <button

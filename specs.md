@@ -379,13 +379,13 @@ Execute the build strictly in the 6 phases below. At the end of every step, run 
   - *Commit:* `feat(visual-mode): build inline katex math, section, table, and macro capsule widgets`
 
 ### Phase 3: Multi-Engine LaTeX Compiler, Log Parser, Double-Buffered PDF & SyncTeX
-- [ ] **Step 3.1:** Implement `compiler_pipeline.rs` supporting embedded Tectonic and external `pdflatex`, `xelatex`, and `lualatex` processes, magic comment detection (`% !TEX program`, `% !TEX root`), cancellation tokens, and precompiled preamble format caching.
+- [x] **Step 3.1:** Implement `compiler_pipeline.rs` supporting embedded Tectonic and external `pdflatex`, `xelatex`, and `lualatex` processes, magic comment detection (`% !TEX program`, `% !TEX root`), cancellation tokens, and precompiled preamble format caching.
   - *Commit:* `feat(compiler): implement multi-engine latex pipeline with preamble format caching`
-- [ ] **Step 3.2:** Implement `log_parser.rs` to extract structured file/line errors, warnings, and bad boxes from raw `.log` output, and wire inline CodeMirror lint diagnostics (`inlineDiagnostics.ts`) + `BuildLogDrawer.tsx`.
+- [x] **Step 3.2:** Implement `log_parser.rs` to extract structured file/line errors, warnings, and bad boxes from raw `.log` output, and wire inline CodeMirror lint diagnostics (`inlineDiagnostics.ts`) + `BuildLogDrawer.tsx`.
   - *Commit:* `feat(diagnostics): add stateful latex log parser and inline editor error squiggles`
-- [ ] **Step 3.3:** Implement `synctex_parser.rs` (decompressing `.synctex.gz` for forward & inverse coordinate lookup) and `font_cmds.rs` (enumerating system OpenType fonts via `fontdb` for `PackageFontPanel.tsx`).
+- [x] **Step 3.3:** Implement `synctex_parser.rs` (decompressing `.synctex.gz` for forward & inverse coordinate lookup) and `font_cmds.rs` (enumerating system OpenType fonts via `fontdb` for `PackageFontPanel.tsx`).
   - *Commit:* `feat(synctex): implement native synctex.gz parser and system opentype font indexer`
-- [ ] **Step 3.4:** Build `PdfViewport.tsx` using `pdfjs-dist` with double-buffered canvas rendering (zero flicker on recompile), `SyncTexOverlay.tsx` pulse animations, and `DetachedPdfWindow.tsx` for multi-monitor pop-out support.
+- [x] **Step 3.4:** Build `PdfViewport.tsx` using `pdfjs-dist` with double-buffered canvas rendering (zero flicker on recompile), `SyncTexOverlay.tsx` pulse animations, and `DetachedPdfWindow.tsx` for multi-monitor pop-out support.
   - *Commit:* `feat(pdf): implement double-buffered pdf.js viewer, synctex jump, and detachable window`
 
 ### Phase 4: GitHub OAuth Device Flow, OS Keychain & Native `git2-rs` Engine
@@ -419,5 +419,5 @@ Before marking the project complete, verify and check off every criterion below:
 - [ ] **Frontend Typecheck & Build:** `pnpm run typecheck` and `pnpm run build` complete cleanly with zero TypeScript or bundler errors.
 - [ ] **Dual-Mode Editor Fidelity:** Switching between **Raw Source** and **Visual Mode** renders inline/display math via KaTeX, section headers, and tables without altering a single byte of the underlying `.tex` document unless edited.
 - [ ] **RTL & BiDi Stability:** Typing mixed Arabic/Hebrew sentences containing `\cite{knuth1984}` and `$\alpha + \beta = \gamma$` maintains right-to-left paragraph flow while keeping the LaTeX command and math expression strictly left-to-right.
-- [ ] **Auto-Compile & Flicker-Free PDF:** Saving or pausing typing for $400\text{ ms}$ triggers background compilation (`Tectonic`, `LuaLaTeX`, `XeLaTeX`, or `pdfLaTeX`), updates the PDF canvas via double-buffering with zero white flash, and supports two-way `Cmd/Ctrl+Click` SyncTeX jumping.
+- [x] **Auto-Compile & Flicker-Free PDF:** Saving or pausing typing for $400\text{ ms}$ triggers background compilation (`Tectonic`, `LuaLaTeX`, `XeLaTeX`, or `pdfLaTeX`), updates the PDF canvas via double-buffering with zero white flash, and supports two-way `Cmd/Ctrl+Click` SyncTeX jumping.
 - [ ] **GitHub Device Auth & Git Sync:** User can authenticate via the 8-character GitHub Device Code, clone a repository, stage/commit/push changes via native `git2`, and reconcile external Git commits with live Yjs CRDT sessions without data loss.

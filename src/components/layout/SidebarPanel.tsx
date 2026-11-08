@@ -4,6 +4,7 @@ import { useGitStore } from '../../store/useGitStore';
 import { useCollabStore } from '../../store/useCollabStore';
 import { FileTreePanel } from '../sidebar/FileTreePanel';
 import { OutlinePanel } from '../sidebar/OutlinePanel';
+import { PackageFontPanel } from '../sidebar/PackageFontPanel';
 import { GitBranch, Users, Settings } from 'lucide-react';
 
 export const SidebarPanel: React.FC = () => {
@@ -53,6 +54,8 @@ export const SidebarPanel: React.FC = () => {
         {activeTab === 'files' && <FileTreePanel />}
 
         {activeTab === 'outline' && <OutlinePanel />}
+
+        {activeTab === 'packages' && <PackageFontPanel />}
 
         {activeTab === 'git' && (
           <div className="flex flex-col h-full p-3 space-y-3">

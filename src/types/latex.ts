@@ -32,8 +32,33 @@ export interface CompilationResult {
   engine: LatexEngine;
   durationMs: number;
   pdfPath?: string;
+  synctexPath?: string;
   diagnostics: LatexDiagnostic[];
   logOutput: string;
+}
+
+export interface EngineInfo {
+  engine: LatexEngine;
+  name: string;
+  path?: string;
+  available: boolean;
+  version?: string;
+  supportsSynctex: boolean;
+  supportsFmtCache: boolean;
+}
+
+export interface SystemFontInfo {
+  family: string;
+  postscriptName?: string;
+  style: string;
+  weight: number;
+  isMonospace: boolean;
+  path?: string;
+}
+
+export interface MagicComments {
+  program?: LatexEngine;
+  root?: string;
 }
 
 export type OutlineItemType =

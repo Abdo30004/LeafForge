@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { FileEntry } from '../types/ipc';
 import type { OutlineItem } from '../types/latex';
 
-export type SidebarTab = 'files' | 'outline' | 'git' | 'collab' | 'settings';
+export type SidebarTab = 'files' | 'outline' | 'git' | 'collab' | 'packages' | 'settings';
 export type EditorMode = 'raw' | 'visual';
 export type AppTheme = 'dark' | 'light';
 
