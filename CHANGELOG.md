@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.6] - 2026-11-08
+
+### Added
+- **Ephemeral Collaboration Invite Tokens:** Added shareable in-memory invite tokens (`LFCOLLAB:<base64>`) and custom URI handler support (`leafforge://collab?...`) enabling real-time WebRTC collaborative editing on public repositories without committing or leaking cryptographic keys to Git.
+- **Deterministic Passphrase Key Derivation:** Implemented Web Crypto SHA-256 passphrase hashing allowing co-authors to join public sessions using human-memorable room passwords.
+- **Dedicated Host vs. Join Workflows:** Added segmented Host and Join tabs in the Collaboration sidebar panel with an instant "Copy Invite Token" button and visual copy feedback badges.
+
 ## [0.6.5] - 2026-11-08
 
 ### Added

@@ -1,6 +1,6 @@
 [package]
 name = "leafforge"
-version = "0.6.5"
+version = "0.6.6"
 description = "LeafForge — Local-First Collaborative LaTeX Desktop IDE"
 authors = ["LeafForge Team"]
 edition = "2024"
