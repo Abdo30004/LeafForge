@@ -23,6 +23,8 @@ describe('CollabPanel, ConflictModal & Presence UI Components', () => {
     expect(html).toContain('Real-Time CRDT Session');
     expect(html).toContain('Secured by repo key in .texflow/room.key');
     expect(html).toContain('Start Live Session');
+    expect(html).toContain('Host Session');
+    expect(html).toContain('Join Session');
   });
 
   it('renders CollabPanel in connected state with peers and Designated Committer leader', () => {
@@ -58,6 +60,7 @@ describe('CollabPanel, ConflictModal & Presence UI Components', () => {
 
     expect(html).toContain('leafforge-project-12345678');
     expect(html).toContain('E2E Encrypted');
+    expect(html).toContain('Copy Invite Token (Public Repos)');
     expect(html).toContain('You are Designated Committer');
     expect(html).toContain('Push Live Changes to GitHub');
     expect(html).toContain('Reconcile with Git (3-Way)');

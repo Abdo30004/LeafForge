@@ -16,10 +16,18 @@ import {
   GitMerge,
   UploadCloud,
   CheckCircle2,
+  Share2,
+  KeyRound,
+  LogIn,
 } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { useCollabStore } from '../../store/useCollabStore';
-import { collabManager } from '../../services/collabManager';
+import {
+  collabManager,
+  createInviteToken,
+  parseInviteToken,
+  deriveKeyFromPassphrase,
+} from '../../services/collabManager';
 import { gitCrdtBridge } from '../../services/gitCrdtBridge';
 import { readFileText } from '../../services/tauriClient';
 import { formatErrorMessage, formatErrorDetails } from '../../utils/formatError';
@@ -59,8 +67,12 @@ export const CollabPanel: React.FC<CollabPanelProps> = ({
   const toggleFollowPeer = useCollabStore((s) => s.toggleFollowPeer);
 
   const [customRoomInput, setCustomRoomInput] = useState('');
+  const [collabMode, setCollabMode] = useState<'host' | 'join'>('host');
+  const [inviteTokenInput, setInviteTokenInput] = useState('');
+  const [passphraseInput, setPassphraseInput] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedToken, setCopiedToken] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [reconciling, setReconciling] = useState(false);
   const [reconcileSuccess, setReconcileSuccess] = useState<string | null>(null);
@@ -74,7 +86,34 @@ export const CollabPanel: React.FC<CollabPanelProps> = ({
     setConnecting(true);
     setErrorMsg(null);
     try {
-      await collabManager.connect(workspacePath, customRoomInput.trim() || undefined);
+      if (collabMode === 'join') {
+        const rawToken = inviteTokenInput.trim();
+        if (rawToken) {
+          const parsed = parseInviteToken(rawToken);
+          if (!parsed && !rawToken.startsWith('LFCOLLAB:')) {
+            throw new Error('Invalid invite token format. Please paste a valid token starting with LFCOLLAB:');
+          }
+          await collabManager.connect(workspacePath, rawToken);
+        } else if (customRoomInput.trim()) {
+          const customKey = passphraseInput.trim()
+            ? await deriveKeyFromPassphrase(passphraseInput)
+            : undefined;
+          await collabManager.connect(workspacePath, {
+            customRoomId: customRoomInput.trim(),
+            customKey,
+          });
+        } else {
+          throw new Error('Please paste an invite token or enter a Room ID.');
+        }
+      } else {
+        const customKey = passphraseInput.trim()
+          ? await deriveKeyFromPassphrase(passphraseInput)
+          : undefined;
+        await collabManager.connect(workspacePath, {
+          customRoomId: customRoomInput.trim() || undefined,
+          customKey,
+        });
+      }
     } catch (err: unknown) {
       const msg = formatErrorMessage(err, 'Failed to connect to session');
       logger.error('Collab', 'Failed to connect to collaboration session', {
@@ -100,6 +139,25 @@ export const CollabPanel: React.FC<CollabPanelProps> = ({
       setTimeout(() => setCopied(false), 2000);
     } catch (e) {
       logger.warn('Collab', 'Clipboard copy error', { error: formatErrorDetails(e) });
+    }
+  };
+
+  const handleCopyInviteToken = async () => {
+    if (!roomId) return;
+    const key = collabManager.getRoomKey();
+    if (!key) return;
+    const folderName = workspacePath
+      ? workspacePath.replace(/\\/g, '/').split('/').pop()
+      : undefined;
+    const token = createInviteToken(roomId, key, folderName);
+    try {
+      await navigator.clipboard.writeText(token);
+      setCopiedToken(true);
+      setTimeout(() => setCopiedToken(false), 2500);
+    } catch (e) {
+      logger.warn('Collab', 'Clipboard copy error for invite token', {
+        error: formatErrorDetails(e),
+      });
     }
   };
 
@@ -218,36 +276,140 @@ export const CollabPanel: React.FC<CollabPanelProps> = ({
               </div>
             )}
 
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-[var(--text-primary)]">
-                Room Name / ID <span className="text-[11px] text-[var(--text-muted)]">(Optional)</span>
-              </label>
-              <input
-                type="text"
-                value={customRoomInput}
-                onChange={(e) => setCustomRoomInput(e.target.value)}
-                placeholder="Auto-generated from project"
-                className="w-full px-2.5 py-1.5 rounded-md bg-[var(--canvas)] border border-[var(--border-subtle)] text-xs font-mono text-[var(--text-primary)] focus:outline-hidden focus:border-accent-primary placeholder:text-zinc-600"
-              />
+            {/* Mode Switcher */}
+            <div className="grid grid-cols-2 p-0.5 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-subtle)] text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setCollabMode('host')}
+                className={`py-1.5 rounded-md flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
+                  collabMode === 'host'
+                    ? 'bg-accent-primary text-black shadow-xs'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <Radio className="w-3 h-3" />
+                <span>Host Session</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCollabMode('join')}
+                className={`py-1.5 rounded-md flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
+                  collabMode === 'join'
+                    ? 'bg-accent-primary text-black shadow-xs'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <LogIn className="w-3 h-3" />
+                <span>Join Session</span>
+              </button>
             </div>
 
-            <button
-              onClick={handleConnect}
-              disabled={connecting || !workspacePath}
-              className="w-full py-2 bg-accent-primary text-black font-semibold rounded-lg text-xs hover:opacity-90 transition-opacity flex items-center justify-center space-x-1.5 disabled:opacity-40 cursor-pointer shadow-xs"
-            >
-              {connecting ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Connecting...</span>
-                </>
-              ) : (
-                <>
-                  <Wifi className="w-3.5 h-3.5" />
-                  <span>Start Live Session</span>
-                </>
-              )}
-            </button>
+            {collabMode === 'host' ? (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-[var(--text-primary)]">
+                    Room Name / ID <span className="text-[11px] text-[var(--text-muted)]">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={customRoomInput}
+                    onChange={(e) => setCustomRoomInput(e.target.value)}
+                    placeholder="Auto-generated from project"
+                    className="w-full px-2.5 py-1.5 rounded-md bg-[var(--canvas)] border border-[var(--border-subtle)] text-xs font-mono text-[var(--text-primary)] focus:outline-hidden focus:border-accent-primary placeholder:text-zinc-600"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-[var(--text-primary)] flex items-center space-x-1">
+                    <KeyRound className="w-3 h-3 text-[var(--text-muted)]" />
+                    <span>Room Passphrase</span>
+                    <span className="text-[11px] text-[var(--text-muted)] font-normal">(Optional for public repos)</span>
+                  </label>
+                  <input
+                    type="password"
+                    value={passphraseInput}
+                    onChange={(e) => setPassphraseInput(e.target.value)}
+                    placeholder="Leave empty to use .texflow/room.key"
+                    className="w-full px-2.5 py-1.5 rounded-md bg-[var(--canvas)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] focus:outline-hidden focus:border-accent-primary placeholder:text-zinc-600 font-mono"
+                  />
+                </div>
+
+                <button
+                  onClick={handleConnect}
+                  disabled={connecting || !workspacePath}
+                  className="w-full py-2 bg-accent-primary text-black font-semibold rounded-lg text-xs hover:opacity-90 transition-opacity flex items-center justify-center space-x-1.5 disabled:opacity-40 cursor-pointer shadow-xs"
+                >
+                  {connecting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Connecting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Wifi className="w-3.5 h-3.5" />
+                      <span>Start Live Session</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-[var(--text-primary)] flex items-center space-x-1">
+                    <Share2 className="w-3 h-3 text-emerald-400" />
+                    <span>Invite Token or Link</span>
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={inviteTokenInput}
+                    onChange={(e) => setInviteTokenInput(e.target.value)}
+                    placeholder="Paste LFCOLLAB:... token received from co-author"
+                    className="w-full px-2.5 py-1.5 rounded-md bg-[var(--canvas)] border border-[var(--border-subtle)] text-xs font-mono text-[var(--text-primary)] focus:outline-hidden focus:border-accent-primary placeholder:text-zinc-600 resize-none"
+                  />
+                </div>
+
+                <div className="relative flex py-1 items-center">
+                  <div className="grow border-t border-[var(--border-subtle)]"></div>
+                  <span className="shrink mx-2 text-[10px] text-[var(--text-muted)] uppercase tracking-wider">or manual</span>
+                  <div className="grow border-t border-[var(--border-subtle)]"></div>
+                </div>
+
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={customRoomInput}
+                    onChange={(e) => setCustomRoomInput(e.target.value)}
+                    placeholder="Room ID"
+                    className="w-full px-2.5 py-1.5 rounded-md bg-[var(--canvas)] border border-[var(--border-subtle)] text-xs font-mono text-[var(--text-primary)] focus:outline-hidden focus:border-accent-primary placeholder:text-zinc-600"
+                  />
+                  <input
+                    type="password"
+                    value={passphraseInput}
+                    onChange={(e) => setPassphraseInput(e.target.value)}
+                    placeholder="Shared Passphrase"
+                    className="w-full px-2.5 py-1.5 rounded-md bg-[var(--canvas)] border border-[var(--border-subtle)] text-xs font-mono text-[var(--text-primary)] focus:outline-hidden focus:border-accent-primary placeholder:text-zinc-600"
+                  />
+                </div>
+
+                <button
+                  onClick={handleConnect}
+                  disabled={connecting || !workspacePath}
+                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-xs transition-colors flex items-center justify-center space-x-1.5 disabled:opacity-40 cursor-pointer shadow-xs"
+                >
+                  {connecting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Joining...</span>
+                    </>
+                  ) : (
+                    <>
+                      <LogIn className="w-3.5 h-3.5" />
+                      <span>Join Live Session</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -285,6 +447,30 @@ export const CollabPanel: React.FC<CollabPanelProps> = ({
                   Role: <strong className="text-[var(--text-primary)]">{userPermission ?? 'write'}</strong>
                   {!canWrite && <span className="text-amber-400 ml-1">(Read-Only)</span>}
                 </span>
+              </div>
+
+              <div className="pt-2 border-t border-[var(--border-subtle)] space-y-1">
+                <button
+                  type="button"
+                  onClick={handleCopyInviteToken}
+                  className="w-full py-1.5 px-2.5 rounded-md bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-xs"
+                  title="Copy shareable invite token for co-authors (public repos safe)"
+                >
+                  {copiedToken ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Invite Token Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Share2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Copy Invite Token (Public Repos)</span>
+                    </>
+                  )}
+                </button>
+                <p className="text-[10px] text-[var(--text-muted)] text-center leading-tight">
+                  Share with co-authors to connect without committing keys to Git.
+                </p>
               </div>
             </div>
 

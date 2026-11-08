@@ -1,7 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as Y from 'yjs';
 import { yCollab } from 'y-codemirror.next';
-import { collabManager } from '../services/collabManager';
+import {
+  collabManager,
+  createInviteToken,
+  parseInviteToken,
+  deriveKeyFromPassphrase,
+} from '../services/collabManager';
 import { useCollabStore } from '../store/useCollabStore';
 import { useWorkspaceStore } from '../store/useWorkspaceStore';
 import { useGitStore } from '../store/useGitStore';
@@ -206,5 +211,52 @@ describe('Yjs CRDT Engine & CollabManager Test Suite', () => {
     expect(useCollabStore.getState().peers).toEqual([]);
     expect(useCollabStore.getState().designatedCommitterId).toBeNull();
     expect(useCollabStore.getState().isCommitter).toBe(false);
+  });
+
+  it('generates and parses shareable invite tokens for public repository collaboration', () => {
+    const roomId = 'leafforge-quantum-physics-abc12345';
+    const key = 'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210';
+    const token = createInviteToken(roomId, key, 'quantum-physics');
+
+    expect(token).toBeDefined();
+    expect(token.startsWith('LFCOLLAB:')).toBe(true);
+
+    const parsed = parseInviteToken(token);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.roomId).toBe(roomId);
+    expect(parsed?.key).toBe(key);
+    expect(parsed?.project).toBe('quantum-physics');
+
+    // Also handles leafforge://collab invite URLs
+    const url = `leafforge://collab?room=${roomId}&key=${key}&project=quantum-physics`;
+    const parsedUrl = parseInviteToken(url);
+    expect(parsedUrl).not.toBeNull();
+    expect(parsedUrl?.roomId).toBe(roomId);
+    expect(parsedUrl?.key).toBe(key);
+
+    // Rejects invalid token
+    expect(parseInviteToken('invalid-gibberish')).toBeNull();
+  });
+
+  it('derives 256-bit AES key deterministically from human passphrase', async () => {
+    const key1 = await deriveKeyFromPassphrase('super-secret-academic-passphrase');
+    const key2 = await deriveKeyFromPassphrase('super-secret-academic-passphrase');
+    const key3 = await deriveKeyFromPassphrase('different-passphrase');
+
+    expect(key1).toBe(key2);
+    expect(key1.length).toBe(64); // 256-bit hex
+    expect(key1).not.toBe(key3);
+  });
+
+  it('connects to collaborative session using invite token in-memory without reading room.key file', async () => {
+    const roomId = 'leafforge-shared-public-room';
+    const key = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+    const token = createInviteToken(roomId, key);
+
+    const connectedRoomId = await collabManager.connect('/mock/workspace/project', token);
+    expect(connectedRoomId).toBe(roomId);
+    expect(useCollabStore.getState().status).toBe('connected');
+    expect(useCollabStore.getState().roomId).toBe(roomId);
+    expect(collabManager.roomKey).toBe(key);
   });
 });

@@ -33,11 +33,67 @@ function getRandomColor(): string {
 
 export interface CollabConnectOptions {
   customRoomId?: string;
+  customKey?: string;
   owner?: string;
   repo?: string;
   signalingServers?: string[];
   websocketUrl?: string;
   skipPermissionCheck?: boolean;
+}
+
+export interface CollabInvitePayload {
+  roomId: string;
+  key: string;
+  project?: string;
+}
+
+/**
+ * Creates an encrypted invite token string for sharing with collaborators out-of-band.
+ * Works seamlessly in public repositories without committing secrets to Git.
+ */
+export function createInviteToken(roomId: string, key: string, project?: string): string {
+  const payload: CollabInvitePayload = { roomId, key, project };
+  return 'LFCOLLAB:' + btoa(JSON.stringify(payload));
+}
+
+/**
+ * Parses an invite token or invite URL into room ID and encryption key.
+ */
+export function parseInviteToken(token: string): CollabInvitePayload | null {
+  try {
+    const raw = token.trim();
+    if (!raw.startsWith('LFCOLLAB:')) {
+      if (raw.startsWith('leafforge://collab')) {
+        const url = new URL(raw);
+        const roomId = url.searchParams.get('room');
+        const key = url.searchParams.get('key');
+        if (roomId && key) {
+          return { roomId, key, project: url.searchParams.get('project') || undefined };
+        }
+      }
+      return null;
+    }
+    const json = atob(raw.slice('LFCOLLAB:'.length));
+    const parsed = JSON.parse(json);
+    if (parsed && typeof parsed.roomId === 'string' && typeof parsed.key === 'string') {
+      return parsed as CollabInvitePayload;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Derives a deterministic 256-bit hexadecimal AES key from a human passphrase
+ * using SHA-256 via Web Crypto API.
+ */
+export async function deriveKeyFromPassphrase(passphrase: string): Promise<string> {
+  const enc = new TextEncoder();
+  const hash = await crypto.subtle.digest('SHA-256', enc.encode(passphrase.trim()));
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 export class CollabManager {
@@ -65,8 +121,12 @@ export class CollabManager {
     return CollabManager.instance;
   }
 
+  public getRoomKey(): string | null {
+    return this.roomKey;
+  }
+
   /**
-   * Connect to collaborative room using public signaling encrypted by .texflow/room.key
+   * Connect to collaborative room using public signaling encrypted by .texflow/room.key or customKey
    * Secured by GitHub collaborator permission check (verify_repo_collaborator)
    */
   public async connect(
@@ -75,10 +135,20 @@ export class CollabManager {
   ): Promise<string> {
     useCollabStore.getState().setStatus('connecting');
 
-    const opts: CollabConnectOptions =
-      typeof optionsOrRoomId === 'string'
-        ? { customRoomId: optionsOrRoomId }
-        : optionsOrRoomId || {};
+    let opts: CollabConnectOptions;
+    if (typeof optionsOrRoomId === 'string') {
+      const parsedToken = parseInviteToken(optionsOrRoomId);
+      if (parsedToken) {
+        opts = {
+          customRoomId: parsedToken.roomId,
+          customKey: parsedToken.key,
+        };
+      } else {
+        opts = { customRoomId: optionsOrRoomId };
+      }
+    } else {
+      opts = optionsOrRoomId || {};
+    }
 
     try {
       // Clean up previous providers if any
@@ -132,8 +202,10 @@ export class CollabManager {
       this.canWrite = myCanWrite;
       useCollabStore.getState().setUserPermission(myPermission, myCanWrite);
 
-      // 2. Fetch or generate the 256-bit AES encryption key in .texflow/room.key
-      const key = await getOrCreateRoomKey(workspacePath);
+      // 2. Fetch or generate the 256-bit AES encryption key
+      // If a customKey is supplied (via invite token or UI passphrase), use it directly in memory;
+      // otherwise fallback to .texflow/room.key in local workspace.
+      const key = opts.customKey || (await getOrCreateRoomKey(workspacePath));
       this.roomKey = key;
 
       // 3. Generate room ID: custom ID or deterministic hash of workspace folder + key snippet
