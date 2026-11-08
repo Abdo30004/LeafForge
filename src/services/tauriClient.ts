@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { FileEntry, FsChangeEvent } from '../types/ipc';
+import type { LspCompletionItem, LspHoverResult, LspStatus } from '../types/latex';
 
 export const isTauriEnvironment = (): boolean => {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -54,4 +55,62 @@ export async function onFsChange(callback: (event: FsChangeEvent) => void): Prom
   return listen<FsChangeEvent>('workspace://fs-change', (e) => {
     callback(e.payload);
   });
+}
+
+// LSP Client IPC bridges
+export async function lspStart(rootPath?: string): Promise<LspStatus> {
+  if (!isTauriEnvironment()) {
+    return {
+      running: true,
+      server: 'Embedded TeX Mock Service',
+      binary_found: false,
+      message: 'Running in browser preview mode',
+    };
+  }
+  return invoke<LspStatus>('lsp_start', { rootPath });
+}
+
+export async function lspStop(): Promise<void> {
+  if (!isTauriEnvironment()) return;
+  return invoke<void>('lsp_stop');
+}
+
+export async function lspStatus(): Promise<LspStatus> {
+  if (!isTauriEnvironment()) {
+    return {
+      running: true,
+      server: 'Embedded TeX Mock Service',
+      binary_found: false,
+      message: 'Running in browser preview mode',
+    };
+  }
+  return invoke<LspStatus>('lsp_status');
+}
+
+export async function lspDidOpen(uri: string, text: string, version = 1): Promise<void> {
+  if (!isTauriEnvironment()) return;
+  return invoke<void>('lsp_did_open', { uri, text, version });
+}
+
+export async function lspDidChange(uri: string, text: string, version = 1): Promise<void> {
+  if (!isTauriEnvironment()) return;
+  return invoke<void>('lsp_did_change', { uri, text, version });
+}
+
+export async function lspCompletion(
+  uri: string,
+  line: number,
+  character: number
+): Promise<LspCompletionItem[]> {
+  if (!isTauriEnvironment()) return [];
+  return invoke<LspCompletionItem[]>('lsp_completion', { uri, line, character });
+}
+
+export async function lspHover(
+  uri: string,
+  line: number,
+  character: number
+): Promise<LspHoverResult | null> {
+  if (!isTauriEnvironment()) return null;
+  return invoke<LspHoverResult | null>('lsp_hover', { uri, line, character });
 }

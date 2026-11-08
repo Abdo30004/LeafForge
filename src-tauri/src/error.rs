@@ -21,6 +21,9 @@ pub enum AppError {
     #[error("Watcher error: {0}")]
     Watcher(String),
 
+    #[error("LSP error: {0}")]
+    Lsp(String),
+
     #[error("Internal error: {0}")]
     Internal(String),
 }
@@ -53,6 +56,7 @@ impl Serialize for AppError {
                 Some(fmt.clone()),
             ),
             AppError::Watcher(msg) => ("WATCHER_ERROR", msg.clone(), None),
+            AppError::Lsp(msg) => ("LSP_ERROR", msg.clone(), None),
             AppError::Internal(msg) => ("INTERNAL_ERROR", msg.clone(), None),
         };
 

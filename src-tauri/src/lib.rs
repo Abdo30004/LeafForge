@@ -7,6 +7,9 @@ use commands::fs_cmds::{
     create_dir, create_file, delete_path, import_binary_asset, list_files, open_folder,
     read_file_text, rename_path, unwatch_directory, watch_directory, write_file_text,
 };
+use commands::lsp_cmds::{
+    lsp_completion, lsp_did_change, lsp_did_open, lsp_hover, lsp_start, lsp_status, lsp_stop,
+};
 use state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -26,6 +29,13 @@ pub fn run() {
             import_binary_asset,
             watch_directory,
             unwatch_directory,
+            lsp_start,
+            lsp_stop,
+            lsp_status,
+            lsp_did_open,
+            lsp_did_change,
+            lsp_completion,
+            lsp_hover,
         ])
         .run(tauri::generate_context!())
         .expect("error while running leafforge application");
