@@ -1,3 +1,4 @@
+pub mod app_logger;
 pub mod compiler_pipeline;
 pub mod git_engine;
 pub mod github_auth;

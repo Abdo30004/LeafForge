@@ -12,6 +12,8 @@ import { BuildLogDrawer } from '../diagnostics/BuildLogDrawer';
 import { GithubDeviceModal } from '../modals/GithubDeviceModal';
 import { ConflictModal } from '../modals/ConflictModal';
 import { CommandPalette } from '../modals/CommandPalette';
+import { formatErrorDetails } from '../../utils/formatError';
+import { logger } from '../../services/logger';
 import { X, FileCode, FileText, BookOpen, Image as ImageIcon } from 'lucide-react';
 
 export const AppShell: React.FC = () => {
@@ -96,7 +98,10 @@ export const AppShell: React.FC = () => {
             markFileSaved(activeFilePath);
             runCompile();
           } catch (err) {
-            console.error('Failed to save file:', err);
+            logger.error('FileSystem', 'Failed to save file on shortcut Ctrl+S', {
+              error: formatErrorDetails(err),
+              filePath: activeFilePath,
+            });
           }
         }
       }

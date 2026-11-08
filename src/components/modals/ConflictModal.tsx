@@ -11,6 +11,8 @@ import {
 import { useCollabStore } from '../../store/useCollabStore';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { gitCrdtBridge, assembleResolvedDocument } from '../../services/gitCrdtBridge';
+import { formatErrorDetails } from '../../utils/formatError';
+import { logger } from '../../services/logger';
 import type { ConflictState, ConflictHunk } from '../../types/collab';
 
 export interface ConflictModalProps {
@@ -74,8 +76,15 @@ export const ConflictModal: React.FC<ConflictModalProps> = ({ conflictOverride }
         previewText,
         workspacePath ?? undefined
       );
+      logger.info(
+        'GitCRDT',
+        `Successfully resolved 3-way merge conflict for ${activeConflict.filePath}`
+      );
     } catch (err) {
-      console.error('Failed to apply conflict resolution:', err);
+      logger.error('GitCRDT', 'Failed to apply conflict resolution', {
+        error: formatErrorDetails(err),
+        filePath: activeConflict.filePath,
+      });
     } finally {
       setIsApplying(false);
     }

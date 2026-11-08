@@ -29,6 +29,8 @@ import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { useCompilerStore } from '../../store/useCompilerStore';
 import { useGitStore } from '../../store/useGitStore';
 import { useCollabStore } from '../../store/useCollabStore';
+import { formatErrorDetails } from '../../utils/formatError';
+import { logger } from '../../services/logger';
 import { collabManager } from '../../services/collabManager';
 import {
   writeFileText,
@@ -761,10 +763,18 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     try {
       const res = cmd.action();
       if (res && typeof res.then === 'function') {
-        void res.catch((err) => console.error('Command execution error:', err));
+        void res.catch((err) =>
+          logger.error('CommandPalette', 'Command async execution error', {
+            commandId: cmd.id,
+            error: formatErrorDetails(err),
+          })
+        );
       }
     } catch (err) {
-      console.error('Command execution error:', err);
+      logger.error('CommandPalette', 'Command execution error', {
+        commandId: cmd.id,
+        error: formatErrorDetails(err),
+      });
     }
   };
 

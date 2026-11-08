@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { useCompilerStore } from '../../store/useCompilerStore';
 import { detectEngines, listFontFamilies } from '../../services/tauriClient';
+import { formatErrorDetails } from '../../utils/formatError';
+import { logger } from '../../services/logger';
 import type { LatexEngine } from '../../types/latex';
 
 export const PackageFontPanel: React.FC = () => {
@@ -37,7 +39,9 @@ export const PackageFontPanel: React.FC = () => {
       const engines = await detectEngines();
       setAvailableEngines(engines);
     } catch (e) {
-      console.error('Failed to detect engines:', e);
+      logger.warn('Compiler', 'Failed to detect LaTeX engines', {
+        error: formatErrorDetails(e),
+      });
     } finally {
       setLoadingEngines(false);
     }
@@ -47,7 +51,11 @@ export const PackageFontPanel: React.FC = () => {
     refreshEngines();
     listFontFamilies()
       .then((fonts) => setFontFamilies(fonts))
-      .catch((e) => console.error('Failed to load fonts:', e));
+      .catch((e) =>
+        logger.warn('Compiler', 'Failed to load system font families', {
+          error: formatErrorDetails(e),
+        })
+      );
   }, []);
 
   const engineDescriptions: Record<LatexEngine, { title: string; subtitle: string; tag: string }> = {

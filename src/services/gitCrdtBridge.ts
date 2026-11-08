@@ -9,6 +9,8 @@ import {
   gitPush,
   writeFileText,
 } from './tauriClient';
+import { formatErrorDetails } from '../utils/formatError';
+import { logger } from './logger';
 import type { ConflictHunk, ConflictState } from '../types/collab';
 
 /**
@@ -241,7 +243,10 @@ export class GitCrdtBridge {
           await writeFileText(filePath, remoteContent);
           useWorkspaceStore.getState().markFileSaved(filePath);
         } catch (e) {
-          console.warn('Failed to write remote file to disk:', e);
+          logger.warn('GitCRDT', 'Failed to write remote file to disk', {
+            error: formatErrorDetails(e),
+            filePath,
+          });
         }
       }
 
@@ -266,7 +271,10 @@ export class GitCrdtBridge {
           await writeFileText(filePath, result.mergedText);
           useWorkspaceStore.getState().markFileSaved(filePath);
         } catch (e) {
-          console.warn('Failed to write cleanly merged file to disk:', e);
+          logger.warn('GitCRDT', 'Failed to write cleanly merged file to disk', {
+            error: formatErrorDetails(e),
+            filePath,
+          });
         }
       }
 
@@ -319,7 +327,10 @@ export class GitCrdtBridge {
         await writeFileText(filePath, resolvedText);
         useWorkspaceStore.getState().markFileSaved(filePath);
       } catch (e) {
-        console.warn('Failed to save resolved file to disk:', e);
+        logger.warn('GitCRDT', 'Failed to save resolved file to disk', {
+          error: formatErrorDetails(e),
+          filePath,
+        });
       }
     }
 

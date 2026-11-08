@@ -22,6 +22,8 @@ import { useCollabStore } from '../../store/useCollabStore';
 import { collabManager } from '../../services/collabManager';
 import { gitCrdtBridge } from '../../services/gitCrdtBridge';
 import { readFileText } from '../../services/tauriClient';
+import { formatErrorMessage, formatErrorDetails } from '../../utils/formatError';
+import { logger } from '../../services/logger';
 import type { RoomConnectionStatus, PeerUser } from '../../types/collab';
 
 export interface CollabPanelProps {
@@ -74,8 +76,13 @@ export const CollabPanel: React.FC<CollabPanelProps> = ({
     try {
       await collabManager.connect(workspacePath, customRoomInput.trim() || undefined);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setErrorMsg(`Failed to connect: ${msg}`);
+      const msg = formatErrorMessage(err, 'Failed to connect to session');
+      logger.error('Collab', 'Failed to connect to collaboration session', {
+        error: formatErrorDetails(err),
+        workspacePath,
+        room: customRoomInput.trim() || undefined,
+      });
+      setErrorMsg(msg);
     } finally {
       setConnecting(false);
     }
@@ -92,7 +99,7 @@ export const CollabPanel: React.FC<CollabPanelProps> = ({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (e) {
-      console.error('Clipboard copy error:', e);
+      logger.warn('Collab', 'Clipboard copy error', { error: formatErrorDetails(e) });
     }
   };
 
@@ -118,8 +125,12 @@ export const CollabPanel: React.FC<CollabPanelProps> = ({
         setTimeout(() => setReconcileSuccess(null), 3000);
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setErrorMsg(`Reconciliation failed: ${msg}`);
+      const msg = formatErrorMessage(err, 'Reconciliation failed');
+      logger.error('Collab', 'Git-CRDT reconciliation failed', {
+        error: formatErrorDetails(err),
+        filePath: activeFilePath,
+      });
+      setErrorMsg(msg);
     } finally {
       setReconciling(false);
     }
@@ -137,8 +148,12 @@ export const CollabPanel: React.FC<CollabPanelProps> = ({
       setReconcileSuccess('Committed and pushed to GitHub as Designated Committer!');
       setTimeout(() => setReconcileSuccess(null), 3000);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setErrorMsg(`Push failed: ${msg}`);
+      const msg = formatErrorMessage(err, 'Push failed');
+      logger.error('Collab', 'Designated committer push failed', {
+        error: formatErrorDetails(err),
+        workspacePath,
+      });
+      setErrorMsg(msg);
     } finally {
       setPushing(false);
     }

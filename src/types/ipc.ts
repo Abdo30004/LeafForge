@@ -19,3 +19,14 @@ export interface FsChangeEvent {
   paths: string[];
   kind: FsChangeKind;
 }
+
+export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'CRASH';
+
+export interface LogEntry {
+  id: string;
+  timestamp: string;
+  level: LogLevel;
+  target: string;
+  message: string;
+  details?: string;
+}

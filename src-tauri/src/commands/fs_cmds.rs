@@ -66,8 +66,13 @@ pub async fn open_folder(
     let path_str = canonical.to_string_lossy().to_string();
 
     if let Ok(mut lock) = state.current_workspace.write() {
-        *lock = Some(canonical);
+        *lock = Some(canonical.clone());
     }
+
+    state.app_logger.set_workspace_path(&canonical);
+    state
+        .app_logger
+        .info("FileSystem", &format!("Opened workspace: {path_str}"), None);
 
     Ok(Some(path_str))
 }

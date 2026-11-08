@@ -15,6 +15,8 @@ import { useCompilerStore } from '../../store/useCompilerStore';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { synctexForward, synctexInverse } from '../../services/tauriClient';
 import { SyncTexOverlay } from './SyncTexOverlay';
+import { formatErrorDetails } from '../../utils/formatError';
+import { logger } from '../../services/logger';
 import type { SyncTexCoordinate } from '../../types/latex';
 
 // Set up PDF.js worker
@@ -115,7 +117,7 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
         });
       } catch (err: unknown) {
         if ((err as { name?: string })?.name !== 'RenderingCancelledException') {
-          console.error('PDF rendering error:', err);
+          logger.error('PDF', 'PDF page rendering error', { error: formatErrorDetails(err) });
         }
         setIsRendering(false);
       }
@@ -227,7 +229,9 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
 
         await renderPageIntoBuffer(doc, validPage, nextBuffer, scale);
       } catch (e) {
-        console.warn('PDF.js failed to load real file, falling back to clean render canvas:', e);
+        logger.debug('PDF', 'PDF.js fallback to mock canvas render', {
+          error: formatErrorDetails(e),
+        });
         if (!cancelled) {
           renderMockPdf(nextBuffer, scale);
         }
@@ -268,7 +272,12 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
           }
         }
       } catch (err) {
-        console.error('Forward SyncTeX error:', err);
+        logger.warn('SyncTeX', 'Forward SyncTeX query failed', {
+          error: formatErrorDetails(err),
+          targetFile,
+          line,
+          column,
+        });
       }
     };
 
@@ -302,7 +311,12 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
         setEditorJumpTarget({ line: result.line, col: result.column });
       }
     } catch (err) {
-      console.error('Inverse SyncTeX query failed:', err);
+      logger.warn('SyncTeX', 'Inverse SyncTeX query failed', {
+        error: formatErrorDetails(err),
+        currentPage,
+        xPt,
+        yPt,
+      });
     }
   };
 

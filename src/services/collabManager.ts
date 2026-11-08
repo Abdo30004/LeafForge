@@ -11,6 +11,8 @@ import {
   gitGetRemoteUrl,
   parseGithubOwnerRepo,
 } from './tauriClient';
+import { formatErrorDetails } from '../utils/formatError';
+import { logger } from './logger';
 import type { PeerUser, PeerCursor } from '../types/collab';
 
 const PEER_COLORS = [
@@ -97,7 +99,9 @@ export class CollabManager {
             }
           }
         } catch (e) {
-          console.warn('Could not determine git remote URL:', e);
+          logger.debug('Collab', 'Could not determine git remote URL', {
+            error: formatErrorDetails(e),
+          });
         }
       }
 
@@ -154,7 +158,9 @@ export class CollabManager {
         try {
           this.wsProvider = new WebsocketProvider(opts.websocketUrl, roomId, this.doc);
         } catch (wsErr) {
-          console.warn('Failed to initialize WebSocket provider fallback:', wsErr);
+          logger.warn('Collab', 'Failed to initialize WebSocket provider fallback', {
+            error: formatErrorDetails(wsErr),
+          });
         }
       }
 
@@ -193,9 +199,12 @@ export class CollabManager {
       useCollabStore.getState().setStatus('connected');
       this.handleAwarenessUpdate();
 
+      logger.info('Collab', `Successfully joined room ${roomId}`);
       return roomId;
     } catch (err) {
-      console.error('Failed to connect to collab session:', err);
+      logger.error('Collab', 'Failed to connect to collab session', {
+        error: formatErrorDetails(err),
+      });
       useCollabStore.getState().setStatus('disconnected');
       throw err;
     }

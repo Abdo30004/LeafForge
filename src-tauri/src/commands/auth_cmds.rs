@@ -3,21 +3,68 @@ use crate::services::github_auth::{
     AuthStatusResponse, CollaboratorPermission, DEFAULT_CLIENT_ID, DeviceCodeResponse,
     GithubAuthService, GithubUserProfile, PollTokenResponse,
 };
+use crate::state::AppState;
 use std::path::PathBuf;
+use tauri::State;
 
 #[tauri::command]
-pub async fn start_github_device_flow(client_id: Option<String>) -> Result<DeviceCodeResponse> {
+pub async fn start_github_device_flow(
+    state: State<'_, AppState>,
+    client_id: Option<String>,
+) -> Result<DeviceCodeResponse> {
     let cid = client_id.unwrap_or_else(|| DEFAULT_CLIENT_ID.to_string());
-    GithubAuthService::start_device_flow(&cid).await
+    state.app_logger.info(
+        "Auth",
+        &format!("Starting GitHub device authorization with client ID: {cid}"),
+        None,
+    );
+    match GithubAuthService::start_device_flow(&cid).await {
+        Ok(res) => {
+            state.app_logger.info(
+                "Auth",
+                &format!("Device code obtained successfully: {}", res.user_code),
+                None,
+            );
+            Ok(res)
+        }
+        Err(err) => {
+            state.app_logger.error(
+                "Auth",
+                &format!("Failed to start device flow: {err}"),
+                Some(&format!("{err:?}")),
+            );
+            Err(err)
+        }
+    }
 }
 
 #[tauri::command]
 pub async fn poll_github_device_token(
+    state: State<'_, AppState>,
     client_id: Option<String>,
     device_code: String,
 ) -> Result<PollTokenResponse> {
     let cid = client_id.unwrap_or_else(|| DEFAULT_CLIENT_ID.to_string());
-    GithubAuthService::poll_token(&cid, &device_code).await
+    match GithubAuthService::poll_token(&cid, &device_code).await {
+        Ok(res) => {
+            if res.status == "success" {
+                state.app_logger.info(
+                    "Auth",
+                    "GitHub OAuth device token successfully acquired and stored in OS Keychain",
+                    None,
+                );
+            }
+            Ok(res)
+        }
+        Err(err) => {
+            state.app_logger.error(
+                "Auth",
+                &format!("Error polling device token: {err}"),
+                Some(&format!("{err:?}")),
+            );
+            Err(err)
+        }
+    }
 }
 
 #[tauri::command]

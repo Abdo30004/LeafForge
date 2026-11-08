@@ -104,6 +104,15 @@ pub async fn compile_document(
         *abort_lock = Some(abort_tx);
     }
 
+    state.app_logger.info(
+        "Compiler",
+        &format!(
+            "Starting build for {root_file} with engine {}",
+            active_engine.display_name()
+        ),
+        None,
+    );
+
     let config = CompilationConfig {
         project_dir: p_dir.clone(),
         root_file: root_file.clone(),
@@ -134,16 +143,38 @@ pub async fn compile_document(
             };
             let synctex_str = synctex_path.map(|p| p.to_string_lossy().to_string());
 
+            let dur_ms = duration.as_millis() as u64;
+            if has_errors {
+                state.app_logger.warn(
+                    "Compiler",
+                    &format!("Compilation finished with errors/warnings ({dur_ms}ms)"),
+                    Some(&format!("Exit code: {exit_code}, diagnostic count: {}", diagnostics.len())),
+                );
+            } else {
+                state.app_logger.info(
+                    "Compiler",
+                    &format!("Compilation completed cleanly in {dur_ms}ms"),
+                    None,
+                );
+            }
+
             Ok(CompilationResult {
                 success: !has_errors,
                 engine: active_engine.as_str().to_string(),
-                duration_ms: duration.as_millis() as u64,
+                duration_ms: dur_ms,
                 pdf_path: pdf_str,
                 synctex_path: synctex_str,
                 diagnostics,
                 log_output,
             })
         }
-        Err(err) => Err(err),
+        Err(err) => {
+            state.app_logger.error(
+                "Compiler",
+                &format!("Compilation pipeline error for {root_file}: {err}"),
+                Some(&format!("{err:?}")),
+            );
+            Err(err)
+        }
     }
 }

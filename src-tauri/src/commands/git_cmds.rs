@@ -1,6 +1,8 @@
 use crate::error::{AppError, Result};
 use crate::services::git_engine::{GitEngine, GitRepoStatus, PullResult, ReconcileResult};
+use crate::state::AppState;
 use std::path::PathBuf;
+use tauri::State;
 
 #[tauri::command]
 pub async fn git_init(project_dir: String) -> Result<()> {
@@ -78,12 +80,14 @@ pub async fn git_unstage_all(project_dir: String) -> Result<()> {
 
 #[tauri::command]
 pub async fn git_commit(
+    state: State<'_, AppState>,
     project_dir: String,
     message: String,
     author_name: Option<String>,
     author_email: Option<String>,
 ) -> Result<String> {
-    tokio::task::spawn_blocking(move || {
+    let msg_clone = message.clone();
+    let res = tokio::task::spawn_blocking(move || {
         let path = PathBuf::from(&project_dir);
         GitEngine::commit(
             &path,
@@ -93,45 +97,123 @@ pub async fn git_commit(
         )
     })
     .await
-    .map_err(|e| AppError::Internal(format!("Spawn blocking failed: {e}")))?
+    .map_err(|e| AppError::Internal(format!("Spawn blocking failed: {e}")))?;
+
+    match res {
+        Ok(oid) => {
+            state
+                .app_logger
+                .info("Git", &format!("Commit created: {oid} - {msg_clone}"), None);
+            Ok(oid)
+        }
+        Err(err) => {
+            state.app_logger.error(
+                "Git",
+                &format!("Commit failed: {err}"),
+                Some(&format!("{err:?}")),
+            );
+            Err(err)
+        }
+    }
 }
 
 #[tauri::command]
-pub async fn git_clone(url: String, target_path: String, branch: Option<String>) -> Result<()> {
-    tokio::task::spawn_blocking(move || {
+pub async fn git_clone(
+    state: State<'_, AppState>,
+    url: String,
+    target_path: String,
+    branch: Option<String>,
+) -> Result<()> {
+    let url_clone = url.clone();
+    let res = tokio::task::spawn_blocking(move || {
         let path = PathBuf::from(&target_path);
         GitEngine::clone_repo(&url, &path, branch.as_deref())
     })
     .await
-    .map_err(|e| AppError::Internal(format!("Spawn blocking failed: {e}")))?
+    .map_err(|e| AppError::Internal(format!("Spawn blocking failed: {e}")))?;
+
+    match res {
+        Ok(()) => {
+            state.app_logger.info(
+                "Git",
+                &format!("Successfully cloned repository: {url_clone}"),
+                None,
+            );
+            Ok(())
+        }
+        Err(err) => {
+            state.app_logger.error(
+                "Git",
+                &format!("Failed to clone repository {url_clone}: {err}"),
+                Some(&format!("{err:?}")),
+            );
+            Err(err)
+        }
+    }
 }
 
 #[tauri::command]
 pub async fn git_push(
+    state: State<'_, AppState>,
     project_dir: String,
     remote_name: Option<String>,
     branch: Option<String>,
 ) -> Result<()> {
-    tokio::task::spawn_blocking(move || {
+    let res = tokio::task::spawn_blocking(move || {
         let path = PathBuf::from(&project_dir);
         GitEngine::push(&path, remote_name.as_deref(), branch.as_deref())
     })
     .await
-    .map_err(|e| AppError::Internal(format!("Spawn blocking failed: {e}")))?
+    .map_err(|e| AppError::Internal(format!("Spawn blocking failed: {e}")))?;
+
+    match res {
+        Ok(()) => {
+            state
+                .app_logger
+                .info("Git", "Git push completed successfully", None);
+            Ok(())
+        }
+        Err(err) => {
+            state.app_logger.error(
+                "Git",
+                &format!("Git push failed: {err}"),
+                Some(&format!("{err:?}")),
+            );
+            Err(err)
+        }
+    }
 }
 
 #[tauri::command]
 pub async fn git_pull(
+    state: State<'_, AppState>,
     project_dir: String,
     remote_name: Option<String>,
     branch: Option<String>,
 ) -> Result<PullResult> {
-    tokio::task::spawn_blocking(move || {
+    let res = tokio::task::spawn_blocking(move || {
         let path = PathBuf::from(&project_dir);
         GitEngine::pull(&path, remote_name.as_deref(), branch.as_deref())
     })
     .await
-    .map_err(|e| AppError::Internal(format!("Spawn blocking failed: {e}")))?
+    .map_err(|e| AppError::Internal(format!("Spawn blocking failed: {e}")))?;
+
+    match res {
+        Ok(pr) => {
+            state
+                .app_logger
+                .info("Git", &format!("Git pull result: {}", pr.message), None);
+            Ok(pr)
+        }
+        Err(err) => {
+            state.app_logger.error(
+                "Git",
+                &format!("Git pull failed: {err}"),
+                Some(&format!("{err:?}")),
+            );
+            Err(err)
+        }
+    }
 }
 
 #[tauri::command]

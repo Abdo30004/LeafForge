@@ -9,6 +9,8 @@ import type {
   SystemFontInfo,
 } from '../types/latex';
 import { useWorkspaceStore } from './useWorkspaceStore';
+import { formatErrorMessage, formatErrorDetails } from '../utils/formatError';
+import { logger } from '../services/logger';
 
 export interface CompilerState {
   engine: LatexEngine;
@@ -19,7 +21,7 @@ export interface CompilerState {
   usePreambleCache: boolean;
   diagnostics: LatexDiagnostic[];
   logDrawerOpen: boolean;
-  activeLogTab: 'errors' | 'warnings' | 'raw';
+  activeLogTab: 'errors' | 'warnings' | 'raw' | 'appLogs';
   rawLog: string;
   activeSyncTarget: SyncTexCoordinate | null;
   availableEngines: EngineInfo[];
@@ -41,7 +43,7 @@ export interface CompilerState {
   ) => void;
   toggleLogDrawer: () => void;
   setLogDrawerOpen: (open: boolean) => void;
-  setActiveLogTab: (tab: 'errors' | 'warnings' | 'raw') => void;
+  setActiveLogTab: (tab: 'errors' | 'warnings' | 'raw' | 'appLogs') => void;
   setActiveSyncTarget: (target: SyncTexCoordinate | null) => void;
   setAvailableEngines: (engines: EngineInfo[]) => void;
   setSystemFonts: (fonts: SystemFontInfo[]) => void;
@@ -117,11 +119,19 @@ export const useCompilerStore = create<CompilerState>((set, get) => ({
         result.pdfPath,
         result.synctexPath
       );
+      const errCount = result.diagnostics.filter((d) => d.severity === 'error').length;
+      if (errCount > 0) {
+        logger.warn('Compiler', `Compilation completed with ${errCount} error(s) in ${result.durationMs}ms`);
+      } else {
+        logger.info('Compiler', `Compilation succeeded in ${result.durationMs}ms`);
+      }
     } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
+      const errMsg = formatErrorMessage(err);
+      const errDetails = formatErrorDetails(err);
+      logger.error('Compiler', `Compilation failed: ${errMsg}`, errDetails);
       set({
         status: 'error',
-        rawLog: errMsg,
+        rawLog: errDetails,
         diagnostics: [
           {
             filePath: rootFile,
@@ -129,6 +139,7 @@ export const useCompilerStore = create<CompilerState>((set, get) => ({
             column: 1,
             severity: 'error',
             message: errMsg,
+            rawLogSnippet: errDetails,
           },
         ],
       });

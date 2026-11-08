@@ -15,6 +15,8 @@ import {
   ChevronRight,
   ChevronDown,
   Star,
+  AlertCircle,
+  X,
 } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import type { FileEntry } from '../../types/ipc';
@@ -30,6 +32,8 @@ import {
   onFsChange,
   watchDirectory,
 } from '../../services/tauriClient';
+import { formatErrorMessage, formatErrorDetails } from '../../utils/formatError';
+import { logger } from '../../services/logger';
 
 export const FileTreePanel: React.FC = () => {
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
@@ -50,6 +54,7 @@ export const FileTreePanel: React.FC = () => {
     defaultValue?: string;
   }>({ type: null });
   const [modalInput, setModalInput] = useState('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const refreshTree = useCallback(async () => {
     if (!workspacePath) return;
@@ -57,7 +62,10 @@ export const FileTreePanel: React.FC = () => {
       const tree = await listFiles(workspacePath);
       setFiles(tree);
     } catch (err) {
-      console.error('Failed to list files:', err);
+      logger.warn('FileSystem', 'Failed to list files in workspace', {
+        error: formatErrorDetails(err),
+        workspacePath,
+      });
     }
   }, [workspacePath, setFiles]);
 
@@ -70,7 +78,9 @@ export const FileTreePanel: React.FC = () => {
           refreshTree();
         });
       } catch (e) {
-        console.warn('Filesystem change listener not active outside Tauri:', e);
+        logger.debug('FileSystem', 'Filesystem change listener inactive outside Tauri', {
+          error: formatErrorDetails(e),
+        });
       }
     };
     setupListener();
@@ -81,6 +91,7 @@ export const FileTreePanel: React.FC = () => {
   }, [refreshTree]);
 
   const handleOpenFolder = async () => {
+    setErrorMsg(null);
     try {
       const selected = await openFolder();
       if (selected) {
@@ -107,9 +118,14 @@ export const FileTreePanel: React.FC = () => {
         if (rootCandidate) {
           setRootTexFile(rootCandidate);
         }
+        logger.info('FileSystem', `Opened workspace folder: ${selected}`);
       }
     } catch (err) {
-      console.error('Error opening folder:', err);
+      const msg = formatErrorMessage(err, 'Failed to open workspace folder');
+      logger.error('FileSystem', 'Failed to open workspace folder', {
+        error: formatErrorDetails(err),
+      });
+      setErrorMsg(msg);
     }
   };
 
@@ -130,63 +146,97 @@ export const FileTreePanel: React.FC = () => {
       const content = await readFileText(entry.path);
       openFile(entry.path, content);
     } catch (err) {
-      console.error('Failed to read file:', err);
+      const msg = formatErrorMessage(err, `Failed to read file: ${entry.name}`);
+      logger.error('FileSystem', `Failed to read file: ${entry.path}`, {
+        error: formatErrorDetails(err),
+        path: entry.path,
+      });
+      setErrorMsg(msg);
       openFile(entry.path, '');
     }
   };
 
   const handleCreateFileSubmit = async () => {
     if (!modalInput.trim() || !workspacePath) return;
+    setErrorMsg(null);
+    const parentDir = modalState.targetPath ?? workspacePath;
+    const newPath = `${parentDir.replace(/\\/g, '/')}/${modalInput.trim()}`;
     try {
-      const parentDir = modalState.targetPath ?? workspacePath;
-      const newPath = `${parentDir.replace(/\\/g, '/')}/${modalInput.trim()}`;
       await createFile(newPath);
       setModalState({ type: null });
       setModalInput('');
+      logger.info('FileSystem', `Created file: ${newPath}`);
       await refreshTree();
       openFile(newPath, '');
     } catch (err) {
-      console.error('Failed to create file:', err);
+      const msg = formatErrorMessage(err, `Failed to create file: ${modalInput.trim()}`);
+      logger.error('FileSystem', 'Failed to create file', {
+        error: formatErrorDetails(err),
+        path: newPath,
+      });
+      setErrorMsg(msg);
     }
   };
 
   const handleCreateDirSubmit = async () => {
     if (!modalInput.trim() || !workspacePath) return;
+    setErrorMsg(null);
+    const parentDir = modalState.targetPath ?? workspacePath;
+    const newPath = `${parentDir.replace(/\\/g, '/')}/${modalInput.trim()}`;
     try {
-      const parentDir = modalState.targetPath ?? workspacePath;
-      const newPath = `${parentDir.replace(/\\/g, '/')}/${modalInput.trim()}`;
       await createDir(newPath);
       setModalState({ type: null });
       setModalInput('');
+      logger.info('FileSystem', `Created directory: ${newPath}`);
       await refreshTree();
     } catch (err) {
-      console.error('Failed to create directory:', err);
+      const msg = formatErrorMessage(err, `Failed to create directory: ${modalInput.trim()}`);
+      logger.error('FileSystem', 'Failed to create directory', {
+        error: formatErrorDetails(err),
+        path: newPath,
+      });
+      setErrorMsg(msg);
     }
   };
 
   const handleRenameSubmit = async () => {
     if (!modalInput.trim() || !modalState.targetPath) return;
+    setErrorMsg(null);
+    const oldPath = modalState.targetPath;
+    const norm = oldPath.replace(/\\/g, '/');
+    const parentDir = norm.substring(0, norm.lastIndexOf('/'));
+    const newPath = `${parentDir}/${modalInput.trim()}`;
     try {
-      const oldPath = modalState.targetPath;
-      const norm = oldPath.replace(/\\/g, '/');
-      const parentDir = norm.substring(0, norm.lastIndexOf('/'));
-      const newPath = `${parentDir}/${modalInput.trim()}`;
       await renamePath(oldPath, newPath);
       setModalState({ type: null });
       setModalInput('');
+      logger.info('FileSystem', `Renamed: ${oldPath} -> ${newPath}`);
       await refreshTree();
     } catch (err) {
-      console.error('Failed to rename path:', err);
+      const msg = formatErrorMessage(err, `Failed to rename: ${oldPath}`);
+      logger.error('FileSystem', 'Failed to rename path', {
+        error: formatErrorDetails(err),
+        oldPath,
+        newPath,
+      });
+      setErrorMsg(msg);
     }
   };
 
   const handleDelete = async (path: string) => {
     if (!confirm(`Are you sure you want to delete ${path}?`)) return;
+    setErrorMsg(null);
     try {
       await deletePath(path);
+      logger.info('FileSystem', `Deleted path: ${path}`);
       await refreshTree();
     } catch (err) {
-      console.error('Failed to delete path:', err);
+      const msg = formatErrorMessage(err, `Failed to delete: ${path}`);
+      logger.error('FileSystem', 'Failed to delete path', {
+        error: formatErrorDetails(err),
+        path,
+      });
+      setErrorMsg(msg);
     }
   };
 
@@ -194,12 +244,19 @@ export const FileTreePanel: React.FC = () => {
     if (!workspacePath) return;
     const source = prompt('Enter absolute path of image/asset to import (.png, .pdf, .eps):');
     if (!source || !source.trim()) return;
+    setErrorMsg(null);
     try {
       const destDir = `${workspacePath.replace(/\\/g, '/')}/figures`;
       await importBinaryAsset(destDir, source.trim());
+      logger.info('FileSystem', `Imported asset from ${source.trim()} into ${destDir}`);
       await refreshTree();
     } catch (err) {
-      console.error('Failed to import asset:', err);
+      const msg = formatErrorMessage(err, 'Failed to import asset');
+      logger.error('FileSystem', 'Failed to import asset', {
+        error: formatErrorDetails(err),
+        source: source.trim(),
+      });
+      setErrorMsg(msg);
     }
   };
 
@@ -365,6 +422,23 @@ export const FileTreePanel: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Error Feedback Banner */}
+      {errorMsg && (
+        <div className="p-2.5 mx-2 my-1.5 rounded bg-rose-500/10 border border-rose-500/20 text-xs text-rose-400 flex items-start justify-between space-x-2 shrink-0">
+          <div className="flex items-start space-x-1.5 flex-1 min-w-0">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-rose-400" />
+            <span className="break-words leading-relaxed">{errorMsg}</span>
+          </div>
+          <button
+            onClick={() => setErrorMsg(null)}
+            className="p-0.5 text-rose-400/80 hover:text-rose-300 rounded cursor-pointer"
+            title="Dismiss error"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Main File List or Empty State */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden py-1">

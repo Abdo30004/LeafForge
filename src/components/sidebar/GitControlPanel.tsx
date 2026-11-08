@@ -12,9 +12,12 @@ import {
   GitFork,
   X,
   PlusCircle,
+  AlertCircle,
 } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { useGitStore } from '../../store/useGitStore';
+import { formatErrorMessage, formatErrorDetails } from '../../utils/formatError';
+import { logger } from '../../services/logger';
 import {
   gitStatus,
   gitStage,
@@ -50,6 +53,7 @@ export const GitControlPanel: React.FC = () => {
   const [newBranchInput, setNewBranchInput] = useState('');
   const [showBranchMenu, setShowBranchMenu] = useState(false);
   const [cloneModalOpen, setCloneModalOpen] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Diff inspection state
   const [inspectDiff, setInspectDiff] = useState<{
@@ -67,7 +71,7 @@ export const GitControlPanel: React.FC = () => {
       const bList = await gitListBranches(workspacePath);
       setBranches(bList);
     } catch (err) {
-      console.error('Failed to get git status:', err);
+      logger.warn('Git', 'Failed to refresh git status', { error: formatErrorDetails(err) });
     } finally {
       setLoadingStatus(false);
     }
@@ -79,47 +83,60 @@ export const GitControlPanel: React.FC = () => {
 
   const handleStageFile = async (path: string) => {
     if (!workspacePath) return;
+    setErrorMsg(null);
     try {
       await gitStage(workspacePath, path);
       await refreshStatus();
     } catch (e) {
-      console.error('Stage failed:', e);
+      const msg = formatErrorMessage(e, `Failed to stage file: ${path}`);
+      logger.error('Git', `Failed to stage file: ${path}`, { error: formatErrorDetails(e), path });
+      setErrorMsg(msg);
     }
   };
 
   const handleUnstageFile = async (path: string) => {
     if (!workspacePath) return;
+    setErrorMsg(null);
     try {
       await gitUnstage(workspacePath, path);
       await refreshStatus();
     } catch (e) {
-      console.error('Unstage failed:', e);
+      const msg = formatErrorMessage(e, `Failed to unstage file: ${path}`);
+      logger.error('Git', `Failed to unstage file: ${path}`, { error: formatErrorDetails(e), path });
+      setErrorMsg(msg);
     }
   };
 
   const handleStageAll = async () => {
     if (!workspacePath) return;
+    setErrorMsg(null);
     try {
       await gitStageAll(workspacePath);
       await refreshStatus();
     } catch (e) {
-      console.error('Stage all failed:', e);
+      const msg = formatErrorMessage(e, 'Failed to stage all files');
+      logger.error('Git', 'Failed to stage all files', { error: formatErrorDetails(e) });
+      setErrorMsg(msg);
     }
   };
 
   const handleUnstageAll = async () => {
     if (!workspacePath) return;
+    setErrorMsg(null);
     try {
       await gitUnstageAll(workspacePath);
       await refreshStatus();
     } catch (e) {
-      console.error('Unstage all failed:', e);
+      const msg = formatErrorMessage(e, 'Failed to unstage all files');
+      logger.error('Git', 'Failed to unstage all files', { error: formatErrorDetails(e) });
+      setErrorMsg(msg);
     }
   };
 
   const handleCommit = async () => {
     if (!workspacePath || !commitMessage.trim() || staged.length === 0) return;
     setLoadingCommit(true);
+    setErrorMsg(null);
     try {
       await gitCommit(
         workspacePath,
@@ -128,9 +145,15 @@ export const GitControlPanel: React.FC = () => {
         userProfile?.email || undefined
       );
       setCommitMessage('');
+      logger.info('Git', `Committed changes with message: "${commitMessage.trim()}"`);
       await refreshStatus();
     } catch (e) {
-      console.error('Commit failed:', e);
+      const msg = formatErrorMessage(e, 'Git commit failed');
+      logger.error('Git', 'Git commit failed', {
+        error: formatErrorDetails(e),
+        commitMessage: commitMessage.trim(),
+      });
+      setErrorMsg(msg);
     } finally {
       setLoadingCommit(false);
     }
@@ -139,11 +162,15 @@ export const GitControlPanel: React.FC = () => {
   const handlePush = async () => {
     if (!workspacePath) return;
     setLoadingSync(true);
+    setErrorMsg(null);
     try {
       await gitPush(workspacePath);
+      logger.info('Git', `Successfully pushed branch ${branch} to origin`);
       await refreshStatus();
     } catch (e) {
-      console.error('Push failed:', e);
+      const msg = formatErrorMessage(e, 'Git push failed');
+      logger.error('Git', 'Git push failed', { error: formatErrorDetails(e), branch });
+      setErrorMsg(msg);
     } finally {
       setLoadingSync(false);
     }
@@ -152,11 +179,15 @@ export const GitControlPanel: React.FC = () => {
   const handlePull = async () => {
     if (!workspacePath) return;
     setLoadingSync(true);
+    setErrorMsg(null);
     try {
       await gitPull(workspacePath);
+      logger.info('Git', `Successfully pulled incoming changes on branch ${branch}`);
       await refreshStatus();
     } catch (e) {
-      console.error('Pull failed:', e);
+      const msg = formatErrorMessage(e, 'Git pull failed');
+      logger.error('Git', 'Git pull failed', { error: formatErrorDetails(e), branch });
+      setErrorMsg(msg);
     } finally {
       setLoadingSync(false);
     }
@@ -164,13 +195,21 @@ export const GitControlPanel: React.FC = () => {
 
   const handleCheckout = async (targetBranch: string, create = false) => {
     if (!workspacePath) return;
+    setErrorMsg(null);
     try {
       await gitCheckoutBranch(workspacePath, targetBranch, create);
       setShowBranchMenu(false);
       setNewBranchInput('');
+      logger.info('Git', `Checked out branch: ${targetBranch} (created: ${create})`);
       await refreshStatus();
     } catch (e) {
-      console.error('Checkout failed:', e);
+      const msg = formatErrorMessage(e, `Checkout failed for branch: ${targetBranch}`);
+      logger.error('Git', 'Checkout branch failed', {
+        error: formatErrorDetails(e),
+        targetBranch,
+        create,
+      });
+      setErrorMsg(msg);
     }
   };
 
@@ -180,7 +219,13 @@ export const GitControlPanel: React.FC = () => {
       const diffContent = await gitDiff(workspacePath, filePath, isStaged);
       setInspectDiff({ filePath, staged: isStaged, content: diffContent });
     } catch (e) {
-      console.error('Diff failed:', e);
+      const msg = formatErrorMessage(e, `Failed to load diff for ${filePath}`);
+      logger.error('Git', 'Failed to inspect diff', {
+        error: formatErrorDetails(e),
+        filePath,
+        isStaged,
+      });
+      setErrorMsg(msg);
     }
   };
 
@@ -311,6 +356,23 @@ export const GitControlPanel: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Error Feedback Banner */}
+        {errorMsg && (
+          <div className="p-2.5 rounded bg-rose-500/10 border border-rose-500/20 text-xs text-rose-400 flex items-start justify-between space-x-2">
+            <div className="flex items-start space-x-1.5 flex-1 min-w-0">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-rose-400" />
+              <span className="break-words leading-relaxed">{errorMsg}</span>
+            </div>
+            <button
+              onClick={() => setErrorMsg(null)}
+              className="p-0.5 text-rose-400/80 hover:text-rose-300 rounded cursor-pointer"
+              title="Dismiss error"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* Commit Message & Action */}
         <div className="space-y-1.5 pt-1">

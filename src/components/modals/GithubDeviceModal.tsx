@@ -19,6 +19,8 @@ import {
   isTauriEnvironment,
 } from '../../services/tauriClient';
 import type { GithubDeviceCode } from '../../types/git';
+import { formatErrorMessage, formatErrorDetails } from '../../utils/formatError';
+import { logger } from '../../services/logger';
 
 const GithubIcon: React.FC<{ className?: string }> = ({ className = 'w-5 h-5' }) => (
   <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
@@ -119,7 +121,7 @@ export const GithubDeviceModal: React.FC = () => {
               schedulePoll();
             }
           } catch (err: unknown) {
-            console.error('Polling error:', err);
+            logger.warn('Auth', `Polling warning: ${formatErrorMessage(err)}`, formatErrorDetails(err));
             schedulePoll();
           }
         }, currentInterval);
@@ -128,7 +130,9 @@ export const GithubDeviceModal: React.FC = () => {
       schedulePoll();
     } catch (err: unknown) {
       setLoading(false);
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = formatErrorMessage(err);
+      const details = formatErrorDetails(err);
+      logger.error('Auth', `Failed to initiate device flow: ${msg}`, details);
       setErrorMsg(`Failed to initiate device flow: ${msg}`);
       clearTimers();
     }
@@ -158,7 +162,7 @@ export const GithubDeviceModal: React.FC = () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (e) {
-      console.error('Clipboard copy error:', e);
+      logger.warn('Auth', `Clipboard copy failed: ${formatErrorMessage(e)}`);
     }
   };
 
@@ -172,7 +176,7 @@ export const GithubDeviceModal: React.FC = () => {
         window.open(deviceData.verificationUri, '_blank');
       }
     } catch (e) {
-      console.error('Failed to open URL:', e);
+      logger.warn('Auth', `Failed to open URL natively: ${formatErrorMessage(e)}`);
       window.open(deviceData.verificationUri, '_blank');
     }
   };
@@ -183,7 +187,7 @@ export const GithubDeviceModal: React.FC = () => {
       setUserProfile(null);
       handleStartFlow();
     } catch (e) {
-      console.error('Logout error:', e);
+      logger.error('Auth', `Logout failed: ${formatErrorMessage(e)}`, formatErrorDetails(e));
     }
   };
 

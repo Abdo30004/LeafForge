@@ -3,6 +3,8 @@ import { X, GitFork, FolderOpen, Loader2, AlertCircle, Check } from 'lucide-reac
 import { gitClone, openFolder, listFiles, watchDirectory, gitStatus } from '../../services/tauriClient';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { useGitStore } from '../../store/useGitStore';
+import { formatErrorMessage, formatErrorDetails } from '../../utils/formatError';
+import { logger } from '../../services/logger';
 
 interface CloneRepoModalProps {
   isOpen: boolean;
@@ -30,7 +32,9 @@ export const CloneRepoModal: React.FC<CloneRepoModalProps> = ({ isOpen, onClose 
         setTargetDir(selected);
       }
     } catch (e) {
-      console.error('Pick directory error:', e);
+      logger.warn('Git', 'Pick clone directory failed or was cancelled', {
+        error: formatErrorDetails(e),
+      });
     }
   };
 
@@ -69,14 +73,21 @@ export const CloneRepoModal: React.FC<CloneRepoModalProps> = ({ isOpen, onClose 
         status.unstaged
       );
 
+      logger.info('Git', `Repository successfully cloned from ${repoUrl.trim()} into ${targetDir.trim()}`);
+
       setTimeout(() => {
         setLoading(false);
         onClose();
       }, 1000);
     } catch (err: unknown) {
       setLoading(false);
-      const msg = err instanceof Error ? err.message : String(err);
-      setErrorMsg(`Failed to clone repository: ${msg}`);
+      const msg = formatErrorMessage(err, 'Failed to clone repository');
+      logger.error('Git', 'Failed to clone repository', {
+        error: formatErrorDetails(err),
+        repoUrl: repoUrl.trim(),
+        targetDir: targetDir.trim(),
+      });
+      setErrorMsg(msg);
     }
   };
 

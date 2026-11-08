@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { FileEntry, FsChangeEvent } from '../types/ipc';
+import type { FileEntry, FsChangeEvent, LogEntry, LogLevel } from '../types/ipc';
 import type {
   AuthStatusResponse,
   CollaboratorPermission,
@@ -515,4 +515,42 @@ export function parseGithubOwnerRepo(url: string): { owner: string; repo: string
     return { owner: sshMatch[1], repo: sshMatch[2] };
   }
   return null;
+}
+
+// App Logging IPC Wrappers
+export async function writeLogEntry(
+  level: LogLevel,
+  target: string,
+  message: string,
+  details?: string
+): Promise<void> {
+  if (!isTauriEnvironment()) {
+    console.log(`[${level}] [${target}] ${message}`, details || '');
+    return;
+  }
+  return invoke<void>('write_log_entry', { level, target, message, details });
+}
+
+export async function getRecentLogs(limit?: number): Promise<LogEntry[]> {
+  if (!isTauriEnvironment()) {
+    return [];
+  }
+  return invoke<LogEntry[]>('get_recent_logs', { limit });
+}
+
+export async function getLogFilePath(): Promise<string> {
+  if (!isTauriEnvironment()) {
+    return 'in-memory-browser.log';
+  }
+  return invoke<string>('get_log_file_path');
+}
+
+export async function clearAppLogs(): Promise<void> {
+  if (!isTauriEnvironment()) return;
+  return invoke<void>('clear_app_logs');
+}
+
+export async function openLogFile(): Promise<void> {
+  if (!isTauriEnvironment()) return;
+  return invoke<void>('open_log_file');
 }

@@ -20,6 +20,8 @@ import {
   watchDirectory,
   getGithubAuthStatus,
 } from '../../services/tauriClient';
+import { formatErrorDetails } from '../../utils/formatError';
+import { logger } from '../../services/logger';
 
 export interface TopHeaderBarProps {
   peersOverride?: PeerUser[];
@@ -66,7 +68,11 @@ export const TopHeaderBar: React.FC<TopHeaderBarProps> = ({
           setUserProfile(status.profile);
         }
       })
-      .catch((e) => console.error('Auth status check failed:', e));
+      .catch((e) =>
+        logger.debug('Auth', 'Auth status check skipped or not signed in', {
+          error: formatErrorDetails(e),
+        })
+      );
   }, [setUserProfile]);
 
   const handleOpenFolder = async () => {
@@ -77,9 +83,12 @@ export const TopHeaderBar: React.FC<TopHeaderBarProps> = ({
         const fileTree = await listFiles(selected);
         setFiles(fileTree);
         await watchDirectory(selected);
+        logger.info('FileSystem', `Opened workspace folder: ${selected}`);
       }
     } catch (err) {
-      console.error('Failed to open folder:', err);
+      logger.error('FileSystem', 'Failed to open workspace folder', {
+        error: formatErrorDetails(err),
+      });
     }
   };
 

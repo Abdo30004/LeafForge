@@ -1,3 +1,4 @@
+use crate::services::app_logger::AppLogger;
 use crate::services::lsp_supervisor::LspSupervisor;
 use crate::services::watcher::WorkspaceWatcher;
 use std::path::PathBuf;
@@ -8,6 +9,7 @@ pub struct AppState {
     pub watcher_handle: Arc<Mutex<Option<WorkspaceWatcher>>>,
     pub lsp_supervisor: Arc<tokio::sync::Mutex<LspSupervisor>>,
     pub active_compile_abort: Arc<tokio::sync::Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
+    pub app_logger: Arc<AppLogger>,
 }
 
 impl Default for AppState {
@@ -17,6 +19,7 @@ impl Default for AppState {
             watcher_handle: Arc::new(Mutex::new(None)),
             lsp_supervisor: Arc::new(tokio::sync::Mutex::new(LspSupervisor::new())),
             active_compile_abort: Arc::new(tokio::sync::Mutex::new(None)),
+            app_logger: Arc::new(AppLogger::new()),
         }
     }
 }
