@@ -536,6 +536,29 @@ pub async fn save_global_settings(settings: GlobalSettings) -> Result<GlobalSett
     SettingsEngine::save_global_settings(&settings)
 }
 
+#[tauri::command]
+pub async fn open_detached_pdf_window(app: AppHandle) -> Result<()> {
+    use tauri::Manager;
+    if let Some(existing) = app.get_webview_window("detached-pdf") {
+        let _ = existing.show();
+        let _ = existing.set_focus();
+        return Ok(());
+    }
+
+    tauri::WebviewWindowBuilder::new(
+        &app,
+        "detached-pdf",
+        tauri::WebviewUrl::App("index.html?window=pdf".into()),
+    )
+    .title("LeafForge — PDF Preview")
+    .inner_size(900.0, 1000.0)
+    .min_inner_size(400.0, 400.0)
+    .build()
+    .map_err(|e| AppError::Internal(format!("Failed to create detached PDF window: {e}")))?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -5,7 +5,15 @@ import { SidebarPanel } from './SidebarPanel';
 import { StatusBar } from './StatusBar';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { useCompilerStore } from '../../store/useCompilerStore';
-import { writeFileText, onFsChange, revealInExplorer, openExternalPath } from '../../services/tauriClient';
+import {
+  writeFileText,
+  onFsChange,
+  revealInExplorer,
+  openExternalPath,
+  getProjectSettings,
+  getGlobalSettings,
+} from '../../services/tauriClient';
+import { WorkspaceManager } from '../../services/workspaceManager';
 import { LatexEditor } from '../../editor/LatexEditor';
 import { PdfViewport } from '../pdf/PdfViewport';
 import { BuildLogDrawer } from '../diagnostics/BuildLogDrawer';
@@ -59,7 +67,85 @@ export const AppShell: React.FC = () => {
     filePath?: string;
   } | null>(null);
 
-  // Global suppression of default browser/webview context menu across desktop app
+  // Restore previous workspace and state on application startup
+  useEffect(() => {
+    WorkspaceManager.restoreInitialWorkspace();
+  }, []);
+
+  // Auto-save workspace open files and active document state on change
+  useEffect(() => {
+    if (workspacePath && openFiles.length > 0) {
+      WorkspaceManager.saveCurrentSession();
+    }
+  }, [workspacePath, openFiles, activeFilePath]);
+
+  // Auto-Save Edits Engine (enabled by default; configurable via settings)
+  useEffect(() => {
+    const dirtyPaths = Object.keys(dirtyFiles).filter((p) => dirtyFiles[p]);
+    if (dirtyPaths.length === 0) return;
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const performAutoSave = async () => {
+      // Determine if autoSave is active (project setting overrides global setting)
+      let autoSaveEnabled = true;
+      let delayMs = 1000;
+
+      if (workspacePath) {
+        try {
+          const ps = await getProjectSettings(workspacePath);
+          if (ps.autoSave !== null && ps.autoSave !== undefined) {
+            autoSaveEnabled = ps.autoSave;
+          }
+          if (ps.autoSaveDelayMs) {
+            delayMs = ps.autoSaveDelayMs;
+          }
+        } catch {
+          // fallback
+        }
+      }
+
+      if (autoSaveEnabled) {
+        try {
+          const gs = await getGlobalSettings();
+          if (gs.autoSave !== undefined && autoSaveEnabled === true) {
+            // global value is already checked unless project overrode it
+          }
+          if (gs.autoSaveDelayMs && delayMs === 1000) {
+            delayMs = gs.autoSaveDelayMs;
+          }
+        } catch {
+          // fallback
+        }
+      }
+
+      if (!autoSaveEnabled) return;
+
+      timer = setTimeout(async () => {
+        for (const filePath of dirtyPaths) {
+          const content = fileContents[filePath];
+          if (content !== undefined) {
+            try {
+              await writeFileText(filePath, content);
+              markFileSaved(filePath);
+              logger.debug('FileSystem', `Auto-saved dirty file: ${filePath}`);
+            } catch (err) {
+              logger.error('FileSystem', 'Auto-save failed for file', {
+                error: formatErrorDetails(err),
+                filePath,
+              });
+            }
+          }
+        }
+      }, delayMs);
+    };
+
+    performAutoSave();
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [dirtyFiles, fileContents, workspacePath, markFileSaved]);
   useEffect(() => {
     const handleGlobalContextMenu = (e: MouseEvent) => {
       e.preventDefault();
@@ -314,7 +400,22 @@ export const AppShell: React.FC = () => {
                     <span className="truncate max-w-[140px]">{fileName}</span>
 
                     {isDirty ? (
-                      <span className="w-1.5 h-1.5 rounded-full bg-accent-primary shrink-0" />
+                      <>
+                        <span
+                          className="w-2 h-2 rounded-full bg-white shadow-xs group-hover:hidden shrink-0"
+                          title="Unsaved changes"
+                        />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            closeFile(filePath);
+                          }}
+                          className="hidden group-hover:block p-0.5 rounded hover:bg-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                          title="Close"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </>
                     ) : (
                       <button
                         onClick={(e) => {
@@ -322,6 +423,7 @@ export const AppShell: React.FC = () => {
                           closeFile(filePath);
                         }}
                         className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-opacity"
+                        title="Close"
                       >
                         <X className="w-3 h-3" />
                       </button>

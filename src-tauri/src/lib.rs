@@ -14,9 +14,10 @@ use commands::compiler_cmds::{
 use commands::font_cmds::{list_font_families, list_system_fonts};
 use commands::fs_cmds::{
     create_dir, create_file, delete_path, duplicate_file, get_global_settings,
-    get_project_settings, import_binary_asset, list_files, open_folder, open_in_default_app,
-    pick_and_import_assets, read_file_binary, read_file_text, rename_path, save_global_settings,
-    save_pdf_as, save_project_settings, unwatch_directory, watch_directory, write_file_text,
+    get_project_settings, import_binary_asset, list_files, open_detached_pdf_window, open_folder,
+    open_in_default_app, pick_and_import_assets, read_file_binary, read_file_text, rename_path,
+    save_global_settings, save_pdf_as, save_project_settings, unwatch_directory, watch_directory,
+    write_file_text,
 };
 use commands::git_cmds::{
     git_checkout_branch, git_clone, git_commit, git_diff, git_get_remote_url, git_init,
@@ -97,6 +98,7 @@ pub fn run() {
             git_remove_remote,
             git_log,
             open_in_default_app,
+            open_detached_pdf_window,
             save_pdf_as,
             pick_and_import_assets,
             get_project_settings,

@@ -171,6 +171,14 @@ export async function getGlobalSettings(): Promise<GlobalSettings> {
       defaultEngine: 'tectonic',
       fontSize: 14,
       autoCompileDelayMs: 1000,
+      autoSave: true,
+      autoSaveDelayMs: 1000,
+      compileTimeoutSecs: 90,
+      compileQuality: 'normal',
+      lastOpenedWorkspace: null,
+      recentWorkspaces: [],
+      restoreWorkspaceState: true,
+      editorWordWrap: true,
     };
   }
   return invoke<GlobalSettings>('get_global_settings');
@@ -181,19 +189,32 @@ export async function saveGlobalSettings(settings: GlobalSettings): Promise<Glob
   return invoke<GlobalSettings>('save_global_settings', { settings });
 }
 
+export async function openDetachedPdfWindow(): Promise<void> {
+  if (!isTauriEnvironment()) {
+    window.open('?window=pdf', '_blank', 'width=900,height=1000');
+    return;
+  }
+  return invoke<void>('open_detached_pdf_window');
+}
+
 export async function importBinaryAsset(targetDir: string, sourcePath: string): Promise<string> {
   return invoke<string>('import_binary_asset', { targetDir, sourcePath });
 }
 
 export async function watchDirectory(dirPath: string): Promise<void> {
+  if (!isTauriEnvironment()) return;
   return invoke<void>('watch_directory', { dirPath });
 }
 
 export async function unwatchDirectory(): Promise<void> {
+  if (!isTauriEnvironment()) return;
   return invoke<void>('unwatch_directory');
 }
 
 export async function onFsChange(callback: (event: FsChangeEvent) => void): Promise<UnlistenFn> {
+  if (!isTauriEnvironment()) {
+    return () => {};
+  }
   return listen<FsChangeEvent>('workspace://fs-change', (e) => {
     callback(e.payload);
   });
@@ -262,7 +283,9 @@ export async function compileDocument(
   projectDir: string,
   rootFile: string,
   engineOverride?: LatexEngine,
-  usePreambleCache = true
+  usePreambleCache = true,
+  timeoutSecs?: number,
+  quality?: string
 ): Promise<CompilationResult> {
   if (!isTauriEnvironment()) {
     return {
@@ -279,6 +302,8 @@ export async function compileDocument(
     rootFile,
     engineOverride,
     usePreambleCache,
+    timeoutSecs,
+    quality,
   });
 }
 

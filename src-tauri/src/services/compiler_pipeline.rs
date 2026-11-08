@@ -27,7 +27,7 @@ pub fn new_background_command<P: AsRef<std::ffi::OsStr>>(program: P) -> Command 
     }
 }
 
-pub const DEFAULT_COMPILE_TIMEOUT_SECS: u64 = 60;
+pub const DEFAULT_COMPILE_TIMEOUT_SECS: u64 = 90;
 
 static MAGIC_PROGRAM_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)%\s*!TEX\s+(?:program|TS-program)\s*=\s*([a-zA-Z0-9_\-]+)")
@@ -359,6 +359,7 @@ pub struct CompilationConfig {
     pub engine: LatexEngine,
     pub use_preamble_cache: bool,
     pub timeout_duration: Duration,
+    pub quality: String, // "draft" | "fast" | "normal" | "full"
 }
 
 pub async fn execute_compilation(
@@ -406,15 +407,22 @@ pub async fn execute_compilation(
             cmd.arg("-X")
                 .arg("compile")
                 .arg("--synctex")
-                .arg("--keep-logs")
-                .arg("--outdir")
-                .arg(&out_dir)
-                .arg(&config.root_file);
+                .arg("--keep-logs");
+
+            if config.quality == "draft" || config.quality == "fast" {
+                cmd.arg("--chatter=minimal");
+            }
+
+            cmd.arg("--outdir").arg(&out_dir).arg(&config.root_file);
         }
         LatexEngine::LuaLatex | LatexEngine::XeLatex | LatexEngine::PdfLatex => {
             cmd.arg("-synctex=1")
                 .arg("-interaction=nonstopmode")
                 .arg("-file-line-error");
+
+            if config.engine == LatexEngine::PdfLatex && config.quality == "draft" {
+                cmd.arg("-draftmode");
+            }
 
             // Redirect all auxiliary files, logs, and output PDF into .leafforge
             cmd.arg(format!("-output-directory={}", out_dir.to_string_lossy()));

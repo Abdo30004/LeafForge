@@ -52,25 +52,25 @@ export const PdfDocumentPreview: React.FC<PdfDocumentPreviewProps> = ({ filePath
         const page = await doc.getPage(pageNum);
         const viewport = page.getViewport({ scale: zoomScale });
         const dpr = window.devicePixelRatio || 1;
+        const outputScale = Math.max(dpr, 2.0);
 
         setPageWidth(viewport.width);
         setPageHeight(viewport.height);
 
-        canvas.width = Math.floor(viewport.width * dpr);
-        canvas.height = Math.floor(viewport.height * dpr);
+        canvas.width = Math.floor(viewport.width * outputScale);
+        canvas.height = Math.floor(viewport.height * outputScale);
         canvas.style.width = `${Math.floor(viewport.width)}px`;
         canvas.style.height = `${Math.floor(viewport.height)}px`;
 
         const ctx = canvas.getContext('2d', { alpha: false });
         if (!ctx) return;
 
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, viewport.width, viewport.height);
+        const transform = [outputScale, 0, 0, outputScale, 0, 0];
 
         const renderTask = page.render({
           canvas,
           canvasContext: ctx,
+          transform,
           viewport,
         });
         renderTaskRef.current = renderTask;

@@ -1,8 +1,7 @@
 use crate::error::{AppError, Result};
 use crate::services::compiler_pipeline::{
-    CompilationConfig, DEFAULT_COMPILE_TIMEOUT_SECS, EngineInfo, LatexEngine, MagicComments,
-    clean_auxiliary_files, detect_all_engines, execute_compilation,
-    parse_magic_comments_from_content,
+    CompilationConfig, EngineInfo, LatexEngine, MagicComments, clean_auxiliary_files,
+    detect_all_engines, execute_compilation, parse_magic_comments_from_content,
 };
 use crate::services::log_parser::{LatexDiagnostic, parse_latex_log};
 use crate::state::AppState;
@@ -70,6 +69,8 @@ pub async fn compile_document(
     root_file: String,
     engine_override: Option<LatexEngine>,
     use_preamble_cache: Option<bool>,
+    timeout_secs: Option<u64>,
+    quality: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<CompilationResult> {
     let p_dir = crate::services::clean_path(PathBuf::from(&project_dir));
@@ -85,15 +86,35 @@ pub async fn compile_document(
         return Err(AppError::NotFound(root_path.to_string_lossy().to_string()));
     }
 
-    // Determine engine: override > magic comment > tectonic
+    // Determine engine: override > magic comment > settings > tectonic
     let file_content = tokio::fs::read_to_string(&root_path)
         .await
         .unwrap_or_default();
     let magic = parse_magic_comments_from_content(&file_content);
 
+    let project_settings =
+        crate::services::settings_engine::SettingsEngine::load_project_settings(&p_dir);
+    let global_settings = crate::services::settings_engine::SettingsEngine::load_global_settings();
+
+    let settings_engine = project_settings
+        .engine
+        .as_deref()
+        .and_then(LatexEngine::from_str_name)
+        .or_else(|| LatexEngine::from_str_name(&global_settings.default_engine));
+
     let active_engine = engine_override
         .or(magic.program)
+        .or(settings_engine)
         .unwrap_or(LatexEngine::Tectonic);
+
+    let effective_timeout = timeout_secs
+        .or(project_settings.compile_timeout_secs)
+        .unwrap_or(global_settings.compile_timeout_secs)
+        .max(10);
+
+    let effective_quality = quality
+        .or(project_settings.compile_quality)
+        .unwrap_or(global_settings.compile_quality);
 
     // Abort previous in-flight compile if any
     {
@@ -113,8 +134,10 @@ pub async fn compile_document(
     state.app_logger.info(
         "Compiler",
         &format!(
-            "Starting build for {root_file} with engine {}",
-            active_engine.display_name()
+            "Starting build for {root_file} with engine {} (timeout: {}s, quality: {})",
+            active_engine.display_name(),
+            effective_timeout,
+            effective_quality
         ),
         None,
     );
@@ -124,7 +147,8 @@ pub async fn compile_document(
         root_file: clean_root.clone(),
         engine: active_engine,
         use_preamble_cache: use_preamble_cache.unwrap_or(true),
-        timeout_duration: Duration::from_secs(DEFAULT_COMPILE_TIMEOUT_SECS),
+        timeout_duration: Duration::from_secs(effective_timeout),
+        quality: effective_quality,
     };
 
     let compile_res = execute_compilation(config, abort_rx).await;

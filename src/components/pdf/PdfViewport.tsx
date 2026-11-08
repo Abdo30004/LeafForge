@@ -18,12 +18,14 @@ import { useCompilerStore } from '../../store/useCompilerStore';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import {
   readFileBinary,
+  readFileText,
   synctexForward,
   synctexInverse,
   revealInExplorer,
   cleanPath,
   savePdfAs,
   openInDefaultApp,
+  openDetachedPdfWindow,
   isTauriEnvironment,
 } from '../../services/tauriClient';
 import { SyncTexOverlay } from './SyncTexOverlay';
@@ -79,6 +81,7 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
   const rootTexFile = useWorkspaceStore((s) => s.rootTexFile) || 'main.tex';
   const openFile = useWorkspaceStore((s) => s.openFile);
+  const setActiveFile = useWorkspaceStore((s) => s.setActiveFile);
   const setEditorJumpTarget = useWorkspaceStore((s) => s.setEditorJumpTarget);
 
   const activeDocRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
@@ -114,18 +117,22 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
         const ctx = canvas.getContext('2d', { alpha: false });
         if (!ctx) return;
 
+        // Render at at least 2.0x resolution for ultra-sharp vectors, fonts and formulas
         const dpr = window.devicePixelRatio || 1;
-        canvas.width = viewport.width * dpr;
-        canvas.height = viewport.height * dpr;
-        canvas.style.width = `${viewport.width}px`;
-        canvas.style.height = `${viewport.height}px`;
+        const outputScale = Math.max(dpr, 2.0);
 
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        canvas.width = Math.floor(viewport.width * outputScale);
+        canvas.height = Math.floor(viewport.height * outputScale);
+        canvas.style.width = `${Math.floor(viewport.width)}px`;
+        canvas.style.height = `${Math.floor(viewport.height)}px`;
+
+        const transform = [outputScale, 0, 0, outputScale, 0, 0];
 
         const renderContext = {
           canvas,
           canvasContext: ctx,
-          viewport: viewport,
+          transform,
+          viewport,
         };
 
         const task = page.render(renderContext);
@@ -260,7 +267,7 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
     };
   }, [workspacePath, rootTexFile, currentPage, numPages, scale]);
 
-  // Handle Inverse SyncTeX (Cmd/Ctrl+Click inside PDF canvas or Context Menu)
+  // Handle Inverse SyncTeX (Double-click or Cmd/Ctrl+Click inside PDF canvas)
   const triggerInverseSync = async (clientX: number, clientY: number) => {
     const canvas = activeBuffer === 'A' ? canvasARef.current : canvasBRef.current;
     if (!canvas || !workspacePath) return;
@@ -276,8 +283,32 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
     try {
       const result = await synctexInverse(workspacePath, rootTexFile, currentPage, xPt, yPt);
       if (result) {
-        openFile(result.file);
-        setEditorJumpTarget({ line: result.line, col: result.column });
+        let targetFile = result.file;
+        const normWork = workspacePath.replace(/\\/g, '/').replace(/\/+$/, '');
+        if (!targetFile.startsWith('/') && !targetFile.includes(':')) {
+          const cleanRel = targetFile.replace(/^[./\\]+/, '');
+          targetFile = `${normWork}/${cleanRel}`;
+        }
+
+        const state = useWorkspaceStore.getState();
+        let content = state.fileContents[targetFile];
+        if (content === undefined) {
+          try {
+            content = await readFileText(targetFile);
+          } catch {
+            content = '';
+          }
+        }
+
+        openFile(targetFile, content);
+        setActiveFile(targetFile);
+
+        // Jump cursor and scroll to line & column
+        setTimeout(() => {
+          setEditorJumpTarget({ line: result.line, col: result.column });
+        }, 30);
+
+        logger.info('SyncTeX', `Inverse SyncTeX jumped to: ${targetFile}:${result.line}:${result.column}`);
       }
     } catch (err) {
       logger.warn('SyncTeX', 'Inverse SyncTeX query failed', {
@@ -290,9 +321,14 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
   };
 
   const handleCanvasClick = async (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!event.metaKey && !event.ctrlKey) {
-      return;
+    if (event.metaKey || event.ctrlKey) {
+      event.preventDefault();
+      triggerInverseSync(event.clientX, event.clientY);
     }
+  };
+
+  const handleCanvasDoubleClick = async (event: React.MouseEvent<HTMLCanvasElement>) => {
+    event.preventDefault();
     triggerInverseSync(event.clientX, event.clientY);
   };
 
@@ -303,7 +339,7 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
       {
         label: 'Jump to LaTeX Source',
         icon: FileText,
-        shortcut: 'Ctrl+Click',
+        shortcut: 'Double-Click / Ctrl+Click',
         action: () => triggerInverseSync(contextMenu.clickX, contextMenu.clickY),
       },
       { divider: true },
@@ -533,8 +569,12 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
           )}
           {!isDetached && (
             <button
-              onClick={() => {
-                window.open(window.location.href, '_blank', 'width=900,height=1000');
+              onClick={async () => {
+                try {
+                  await openDetachedPdfWindow();
+                } catch (e) {
+                  logger.error('PDF', 'Failed to open detached PDF window', { error: formatErrorDetails(e) });
+                }
               }}
               className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)]"
               title="Pop out PDF to separate window"
@@ -578,7 +618,9 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
             <canvas
               ref={canvasARef}
               onClick={handleCanvasClick}
-              className={`absolute top-0 left-0 transition-opacity duration-150 cursor-crosshair ${
+              onDoubleClick={handleCanvasDoubleClick}
+              title="Double-click or Ctrl+Click to jump to LaTeX source"
+              className={`absolute top-0 left-0 transition-opacity duration-150 cursor-pointer ${
                 activeBuffer === 'A' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
               }`}
             />
@@ -587,7 +629,9 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
             <canvas
               ref={canvasBRef}
               onClick={handleCanvasClick}
-              className={`absolute top-0 left-0 transition-opacity duration-150 cursor-crosshair ${
+              onDoubleClick={handleCanvasDoubleClick}
+              title="Double-click or Ctrl+Click to jump to LaTeX source"
+              className={`absolute top-0 left-0 transition-opacity duration-150 cursor-pointer ${
                 activeBuffer === 'B' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
               }`}
             />
@@ -606,7 +650,7 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
       {/* Subtle Hint Bar */}
       <div className="h-5 bg-[var(--surface-elevated)] border-t border-[var(--border-subtle)] px-2 flex items-center justify-between text-[10px] text-[var(--text-muted)]">
         <div className="flex items-center space-x-2">
-          <span>⇄ Cmd/Ctrl+Click canvas to jump to LaTeX source</span>
+          <span>⇄ Double-click or Ctrl+Click canvas to jump to LaTeX source</span>
           {isRendering && <span className="text-accent-primary">● Rendering...</span>}
         </div>
         <div className="flex items-center space-x-1 font-mono">

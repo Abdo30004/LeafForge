@@ -28,7 +28,6 @@ import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import type { FileEntry } from '../../types/ipc';
 import { getFileCategory, isBuildArtifact } from '../../utils/fileCategory';
 import {
-  openFolder,
   listFiles,
   readFileText,
   createFile,
@@ -42,8 +41,8 @@ import {
   pickAndImportAssets,
   isTauriEnvironment,
   onFsChange,
-  watchDirectory,
 } from '../../services/tauriClient';
+import { WorkspaceManager } from '../../services/workspaceManager';
 import { formatErrorMessage, formatErrorDetails } from '../../utils/formatError';
 import { logger } from '../../services/logger';
 import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
@@ -67,7 +66,6 @@ export const FileTreePanel: React.FC = () => {
   const rootTexFile = useWorkspaceStore((s) => s.rootTexFile);
   const dirtyFiles = useWorkspaceStore((s) => s.dirtyFiles);
 
-  const setWorkspacePath = useWorkspaceStore((s) => s.setWorkspacePath);
   const setFiles = useWorkspaceStore((s) => s.setFiles);
   const openFile = useWorkspaceStore((s) => s.openFile);
   const setRootTexFile = useWorkspaceStore((s) => s.setRootTexFile);
@@ -125,33 +123,7 @@ export const FileTreePanel: React.FC = () => {
   const handleOpenFolder = async () => {
     setErrorMsg(null);
     try {
-      const selected = await openFolder();
-      if (selected) {
-        setWorkspacePath(selected);
-        const tree = await listFiles(selected);
-        setFiles(tree);
-        await watchDirectory(selected);
-
-        // Auto-detect root .tex file if main.tex exists
-        const findMain = (entries: FileEntry[]): string | null => {
-          for (const e of entries) {
-            if (!e.isDirectory && (e.name === 'main.tex' || e.name.endsWith('.tex'))) {
-              return e.path;
-            }
-            if (e.children) {
-              const res = findMain(e.children);
-              if (res) return res;
-            }
-          }
-          return null;
-        };
-
-        const rootCandidate = findMain(tree);
-        if (rootCandidate) {
-          setRootTexFile(rootCandidate);
-        }
-        logger.info('FileSystem', `Opened workspace folder: ${selected}`);
-      }
+      await WorkspaceManager.switchWorkspace();
     } catch (err) {
       const msg = formatErrorMessage(err, 'Failed to open workspace folder');
       logger.error('FileSystem', 'Failed to open workspace folder', {

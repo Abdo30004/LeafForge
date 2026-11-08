@@ -6,30 +6,104 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectSettings {
+    #[serde(default)]
     pub root_file: Option<String>,
+    #[serde(default)]
     pub engine: Option<String>,
+    #[serde(default)]
+    pub compile_timeout_secs: Option<u64>,
+    #[serde(default)]
+    pub compile_quality: Option<String>, // "draft" | "fast" | "normal" | "full"
+    #[serde(default)]
+    pub auto_save: Option<bool>,
+    #[serde(default)]
+    pub auto_save_delay_ms: Option<u64>,
+    #[serde(default)]
     pub git_remote: Option<String>,
+    #[serde(default)]
     pub git_branch: Option<String>,
+    #[serde(default)]
     pub auto_compile: Option<bool>,
+    #[serde(default)]
     pub synctex_enabled: Option<bool>,
+    #[serde(default)]
+    pub open_files: Option<Vec<String>>,
+    #[serde(default)]
+    pub active_file: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct GlobalSettings {
+    #[serde(default = "default_theme")]
     pub theme: String, // "dark" | "light"
+    #[serde(default = "default_engine")]
     pub default_engine: String,
+    #[serde(default = "default_font_size")]
     pub font_size: u32,
+    #[serde(default = "default_auto_compile_delay")]
     pub auto_compile_delay_ms: u64,
+    #[serde(default = "default_auto_save")]
+    pub auto_save: bool,
+    #[serde(default = "default_auto_save_delay")]
+    pub auto_save_delay_ms: u64,
+    #[serde(default = "default_compile_timeout")]
+    pub compile_timeout_secs: u64,
+    #[serde(default = "default_compile_quality")]
+    pub compile_quality: String, // "draft" | "fast" | "normal" | "full"
+    #[serde(default)]
+    pub last_opened_workspace: Option<String>,
+    #[serde(default)]
+    pub recent_workspaces: Vec<String>,
+    #[serde(default = "default_true")]
+    pub restore_workspace_state: bool,
+    #[serde(default = "default_true")]
+    pub editor_word_wrap: bool,
+}
+
+fn default_theme() -> String {
+    "dark".to_string()
+}
+fn default_engine() -> String {
+    "tectonic".to_string()
+}
+fn default_font_size() -> u32 {
+    14
+}
+fn default_auto_compile_delay() -> u64 {
+    1000
+}
+fn default_auto_save() -> bool {
+    true
+}
+fn default_auto_save_delay() -> u64 {
+    1000
+}
+fn default_compile_timeout() -> u64 {
+    90
+}
+fn default_compile_quality() -> String {
+    "normal".to_string()
+}
+fn default_true() -> bool {
+    true
 }
 
 impl Default for GlobalSettings {
     fn default() -> Self {
         Self {
-            theme: "dark".to_string(),
-            default_engine: "tectonic".to_string(),
-            font_size: 14,
-            auto_compile_delay_ms: 1000,
+            theme: default_theme(),
+            default_engine: default_engine(),
+            font_size: default_font_size(),
+            auto_compile_delay_ms: default_auto_compile_delay(),
+            auto_save: default_auto_save(),
+            auto_save_delay_ms: default_auto_save_delay(),
+            compile_timeout_secs: default_compile_timeout(),
+            compile_quality: default_compile_quality(),
+            last_opened_workspace: None,
+            recent_workspaces: Vec::new(),
+            restore_workspace_state: true,
+            editor_word_wrap: true,
         }
     }
 }
@@ -142,10 +216,16 @@ mod tests {
         let updated = ProjectSettings {
             root_file: Some("paper.tex".into()),
             engine: Some("tectonic".into()),
+            compile_timeout_secs: Some(120),
+            compile_quality: Some("fast".into()),
+            auto_save: Some(true),
+            auto_save_delay_ms: Some(1500),
             git_remote: Some("https://github.com/user/paper.git".into()),
             git_branch: Some("main".into()),
             auto_compile: Some(true),
             synctex_enabled: Some(true),
+            open_files: Some(vec!["paper.tex".into(), "refs.bib".into()]),
+            active_file: Some("paper.tex".into()),
         };
 
         SettingsEngine::save_project_settings(tmp.path(), &updated).expect("save");

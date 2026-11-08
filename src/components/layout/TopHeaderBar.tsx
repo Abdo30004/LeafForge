@@ -19,12 +19,10 @@ import { useGitStore } from '../../store/useGitStore';
 import { useCollabStore } from '../../store/useCollabStore';
 import type { PeerUser } from '../../types/collab';
 import {
-  openFolder,
-  listFiles,
-  watchDirectory,
   getGithubAuthStatus,
   logoutGithub,
 } from '../../services/tauriClient';
+import { WorkspaceManager } from '../../services/workspaceManager';
 import { formatErrorDetails } from '../../utils/formatError';
 import { logger } from '../../services/logger';
 
@@ -45,8 +43,6 @@ export const TopHeaderBar: React.FC<TopHeaderBarProps> = ({
   const theme = useWorkspaceStore((s) => s.theme);
   const toggleTheme = useWorkspaceStore((s) => s.toggleTheme);
   const toggleCommandPalette = useWorkspaceStore((s) => s.toggleCommandPalette);
-  const setWorkspacePath = useWorkspaceStore((s) => s.setWorkspacePath);
-  const setFiles = useWorkspaceStore((s) => s.setFiles);
 
   const compilerStatus = useCompilerStore((s) => s.status);
   const compilerEngine = useCompilerStore((s) => s.engine);
@@ -123,20 +119,7 @@ export const TopHeaderBar: React.FC<TopHeaderBarProps> = ({
   }, [setUserProfile]);
 
   const handleOpenFolder = async () => {
-    try {
-      const selected = await openFolder();
-      if (selected) {
-        setWorkspacePath(selected);
-        const fileTree = await listFiles(selected);
-        setFiles(fileTree);
-        await watchDirectory(selected);
-        logger.info('FileSystem', `Opened workspace folder: ${selected}`);
-      }
-    } catch (err) {
-      logger.error('FileSystem', 'Failed to open workspace folder', {
-        error: formatErrorDetails(err),
-      });
-    }
+    await WorkspaceManager.switchWorkspace();
   };
 
   const getWorkspaceTitle = (): string => {
