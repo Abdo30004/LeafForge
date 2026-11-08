@@ -12,6 +12,7 @@ export const StatusBar: React.FC = () => {
   const compilerEngine = useCompilerStore((s) => s.engine);
   const compilerStatus = useCompilerStore((s) => s.status);
   const lastDuration = useCompilerStore((s) => s.lastBuildDurationMs);
+  const toggleLogDrawer = useCompilerStore((s) => s.toggleLogDrawer);
 
   const cursorPosition = useWorkspaceStore((s) => s.cursorPosition);
   const activeLineIsRtl = useWorkspaceStore((s) => s.activeLineIsRtl);
@@ -34,7 +35,11 @@ export const StatusBar: React.FC = () => {
         <div className="h-3 w-[1px] bg-[var(--border-subtle)]" />
 
         {/* Compiler Status */}
-        <div className="flex items-center space-x-1 hover:text-[var(--text-primary)] cursor-pointer">
+        <div
+          onClick={toggleLogDrawer}
+          className="flex items-center space-x-1 hover:text-[var(--text-primary)] cursor-pointer"
+          title="Click to toggle compiler log drawer"
+        >
           <Zap
             className={`w-3 h-3 ${
               compilerStatus === 'compiling'

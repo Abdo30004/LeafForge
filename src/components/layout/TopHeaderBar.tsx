@@ -26,6 +26,9 @@ export const TopHeaderBar: React.FC = () => {
   const compilerStatus = useCompilerStore((s) => s.status);
   const compilerEngine = useCompilerStore((s) => s.engine);
   const lastDuration = useCompilerStore((s) => s.lastBuildDurationMs);
+  const runCompile = useCompilerStore((s) => s.runCompile);
+  const toggleLogDrawer = useCompilerStore((s) => s.toggleLogDrawer);
+  const diagnostics = useCompilerStore((s) => s.diagnostics);
 
   const handleOpenFolder = async () => {
     try {
@@ -130,31 +133,43 @@ export const TopHeaderBar: React.FC = () => {
       {/* Right: Actions, Compile Status & Theme */}
       <div className="flex items-center space-x-2">
         {/* Compile Pill */}
-        <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs bg-[var(--canvas)] border border-[var(--border-subtle)]">
+        <div
+          onClick={toggleLogDrawer}
+          className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs bg-[var(--canvas)] border border-[var(--border-subtle)] cursor-pointer hover:border-zinc-500 transition-colors"
+          title="Click to view build logs & diagnostics"
+        >
           <span
             className={`w-2 h-2 rounded-full ${
               compilerStatus === 'compiling'
                 ? 'bg-amber-400 animate-pulse'
                 : compilerStatus === 'error'
-                  ? 'bg-rose-500'
-                  : 'bg-emerald-500'
+                  ? 'bg-rose-500 animate-pulse'
+                  : compilerStatus === 'warning'
+                    ? 'bg-amber-500'
+                    : 'bg-emerald-500'
             }`}
           />
           <span className="capitalize text-[var(--text-primary)] font-medium">
             {compilerEngine}
           </span>
           <span className="text-[var(--text-muted)] text-[11px]">
-            {lastDuration > 0 ? `${lastDuration}ms` : 'Ready'}
+            {compilerStatus === 'error'
+              ? `${diagnostics.filter((d) => d.severity === 'error').length} Errors`
+              : lastDuration > 0
+                ? `${lastDuration}ms`
+                : 'Ready'}
           </span>
         </div>
 
         {/* Compile Button */}
         <button
-          className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-colors"
+          onClick={() => runCompile()}
+          disabled={compilerStatus === 'compiling'}
+          className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-colors disabled:opacity-50"
           title="Compile Document (Cmd/Ctrl+S or Cmd/Ctrl+Enter)"
         >
-          <Play className="w-3 h-3 fill-current" />
-          <span>Compile</span>
+          <Play className={`w-3 h-3 fill-current ${compilerStatus === 'compiling' ? 'animate-spin' : ''}`} />
+          <span>{compilerStatus === 'compiling' ? 'Compiling...' : 'Compile'}</span>
         </button>
 
         <div className="h-4 w-[1px] bg-[var(--border-subtle)]" />

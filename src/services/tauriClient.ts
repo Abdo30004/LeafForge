@@ -1,7 +1,18 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { FileEntry, FsChangeEvent } from '../types/ipc';
-import type { LspCompletionItem, LspHoverResult, LspStatus } from '../types/latex';
+import type {
+  CompilationResult,
+  EngineInfo,
+  LatexEngine,
+  LspCompletionItem,
+  LspHoverResult,
+  LspStatus,
+  MagicComments,
+  SyncTexCoordinate,
+  SyncTexInverseResult,
+  SystemFontInfo,
+} from '../types/latex';
 
 export const isTauriEnvironment = (): boolean => {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -113,4 +124,150 @@ export async function lspHover(
 ): Promise<LspHoverResult | null> {
   if (!isTauriEnvironment()) return null;
   return invoke<LspHoverResult | null>('lsp_hover', { uri, line, character });
+}
+
+// Compiler & Multi-Engine Pool IPC bridges
+export async function compileDocument(
+  projectDir: string,
+  rootFile: string,
+  engineOverride?: LatexEngine,
+  usePreambleCache = true
+): Promise<CompilationResult> {
+  if (!isTauriEnvironment()) {
+    return {
+      success: true,
+      engine: engineOverride || 'tectonic',
+      durationMs: 42,
+      pdfPath: `${projectDir}/${rootFile.replace(/\.tex$/, '.pdf')}`,
+      diagnostics: [],
+      logOutput: 'Mock browser compile successful.',
+    };
+  }
+  return invoke<CompilationResult>('compile_document', {
+    projectDir,
+    rootFile,
+    engineOverride,
+    usePreambleCache,
+  });
+}
+
+export async function detectEngines(): Promise<EngineInfo[]> {
+  if (!isTauriEnvironment()) {
+    return [
+      {
+        engine: 'tectonic',
+        name: 'Tectonic (Auto-CTAN / XeTeX)',
+        available: true,
+        version: '0.15.0',
+        supportsSynctex: true,
+        supportsFmtCache: false,
+      },
+      {
+        engine: 'lualatex',
+        name: 'LuaLaTeX',
+        available: false,
+        supportsSynctex: true,
+        supportsFmtCache: true,
+      },
+      {
+        engine: 'xelatex',
+        name: 'XeLaTeX',
+        available: false,
+        supportsSynctex: true,
+        supportsFmtCache: true,
+      },
+      {
+        engine: 'pdflatex',
+        name: 'pdfLaTeX',
+        available: false,
+        supportsSynctex: true,
+        supportsFmtCache: true,
+      },
+    ];
+  }
+  return invoke<EngineInfo[]>('detect_engines');
+}
+
+export async function abortCompilation(): Promise<boolean> {
+  if (!isTauriEnvironment()) return false;
+  return invoke<boolean>('abort_compilation');
+}
+
+export async function cleanAuxFiles(projectDir: string, rootFile: string): Promise<string[]> {
+  if (!isTauriEnvironment()) return [];
+  return invoke<string[]>('clean_aux_files', { projectDir, rootFile });
+}
+
+export async function parseMagicComments(filePath: string): Promise<MagicComments> {
+  if (!isTauriEnvironment()) return {};
+  return invoke<MagicComments>('parse_magic_comments', { filePath });
+}
+
+// SyncTeX Bridges
+export async function synctexForward(
+  projectDir: string,
+  rootFile: string,
+  file: string,
+  line: number,
+  column: number
+): Promise<SyncTexCoordinate | null> {
+  if (!isTauriEnvironment()) {
+    return { page: 1, x: 72, y: 150, width: 250, height: 18 };
+  }
+  return invoke<SyncTexCoordinate | null>('synctex_forward', {
+    projectDir,
+    rootFile,
+    file,
+    line,
+    column,
+  });
+}
+
+export async function synctexInverse(
+  projectDir: string,
+  rootFile: string,
+  page: number,
+  x: number,
+  y: number
+): Promise<SyncTexInverseResult | null> {
+  if (!isTauriEnvironment()) {
+    return { file: rootFile, line: 1, column: 1 };
+  }
+  return invoke<SyncTexInverseResult | null>('synctex_inverse', {
+    projectDir,
+    rootFile,
+    page,
+    x,
+    y,
+  });
+}
+
+// Font Discovery Bridges
+export async function listSystemFonts(): Promise<SystemFontInfo[]> {
+  if (!isTauriEnvironment()) {
+    return [
+      {
+        family: 'Amiri',
+        postscriptName: 'Amiri-Regular',
+        style: 'Normal',
+        weight: 400,
+        isMonospace: false,
+      },
+      {
+        family: 'JetBrains Mono',
+        postscriptName: 'JetBrainsMono-Regular',
+        style: 'Normal',
+        weight: 400,
+        isMonospace: true,
+      },
+    ];
+  }
+  return invoke<SystemFontInfo[]>('list_system_fonts');
+}
+
+export async function listFontFamilies(): Promise<string[]> {
+  if (!isTauriEnvironment()) {
+    return ['Amiri', 'JetBrains Mono', 'Inter', 'Scheherazade New', 'Frank Ruhl Libre'];
+  }
+  return invoke<string[]>('list_font_families');
 }

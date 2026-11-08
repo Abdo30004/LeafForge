@@ -4,8 +4,11 @@ import { ActivityRail } from './ActivityRail';
 import { SidebarPanel } from './SidebarPanel';
 import { StatusBar } from './StatusBar';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
-import { writeFileText } from '../../services/tauriClient';
+import { useCompilerStore } from '../../store/useCompilerStore';
+import { writeFileText, onFsChange } from '../../services/tauriClient';
 import { LatexEditor } from '../../editor/LatexEditor';
+import { PdfViewport } from '../pdf/PdfViewport';
+import { BuildLogDrawer } from '../diagnostics/BuildLogDrawer';
 import { X, FileCode, FileText, BookOpen, Image as ImageIcon } from 'lucide-react';
 
 export const AppShell: React.FC = () => {
@@ -14,6 +17,7 @@ export const AppShell: React.FC = () => {
   const fileContents = useWorkspaceStore((s) => s.fileContents);
   const dirtyFiles = useWorkspaceStore((s) => s.dirtyFiles);
   const pdfPanelWidth = useWorkspaceStore((s) => s.pdfPanelWidth);
+  const runCompile = useCompilerStore((s) => s.runCompile);
 
   const setActiveFile = useWorkspaceStore((s) => s.setActiveFile);
   const closeFile = useWorkspaceStore((s) => s.closeFile);
@@ -21,6 +25,42 @@ export const AppShell: React.FC = () => {
   const setPdfPanelWidth = useWorkspaceStore((s) => s.setPdfPanelWidth);
 
   const isResizingPdfRef = useRef(false);
+
+  // Background file watcher integration: auto-compile on changes to TeX/bib/cls/sty
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    onFsChange((event) => {
+      const isRelevant = event.paths.some((p) => {
+        const lower = p.toLowerCase();
+        return (
+          lower.endsWith('.tex') ||
+          lower.endsWith('.bib') ||
+          lower.endsWith('.sty') ||
+          lower.endsWith('.cls')
+        );
+      });
+
+      if (isRelevant) {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          runCompile();
+        }, 400);
+      }
+    })
+      .then((unsub) => {
+        unlisten = unsub;
+      })
+      .catch(() => {
+        // ignore in mock mode
+      });
+
+    return () => {
+      if (unlisten) unlisten();
+      if (debounceTimer) clearTimeout(debounceTimer);
+    };
+  }, [runCompile]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -41,7 +81,7 @@ export const AppShell: React.FC = () => {
     };
   }, [setPdfPanelWidth]);
 
-  // Global Save shortcut (Cmd/Ctrl + S)
+  // Global Save shortcut (Cmd/Ctrl + S) & Auto-Compile
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
@@ -51,6 +91,7 @@ export const AppShell: React.FC = () => {
           try {
             await writeFileText(activeFilePath, content);
             markFileSaved(activeFilePath);
+            runCompile();
           } catch (err) {
             console.error('Failed to save file:', err);
           }
@@ -60,7 +101,7 @@ export const AppShell: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeFilePath, fileContents, markFileSaved]);
+  }, [activeFilePath, fileContents, markFileSaved, runCompile]);
 
   const getFileName = (path: string): string => {
     const norm = path.replace(/\\/g, '/');
@@ -148,6 +189,8 @@ export const AppShell: React.FC = () => {
                 </p>
               </div>
             )}
+            {/* Filterable Build Log Drawer */}
+            <BuildLogDrawer />
           </div>
         </div>
 
@@ -164,25 +207,7 @@ export const AppShell: React.FC = () => {
           style={{ width: `${pdfPanelWidth}px` }}
           className="h-full bg-[var(--surface-elevated)] flex flex-col shrink-0 overflow-hidden select-none"
         >
-          {/* PDF Panel Header */}
-          <div className="h-[34px] border-b border-[var(--border-subtle)] px-3 flex items-center justify-between text-xs shrink-0">
-            <span className="font-semibold text-[11px] uppercase tracking-wider text-[var(--text-muted)]">
-              PDF Preview
-            </span>
-            <span className="text-[11px] text-[var(--text-muted)]">Page 1 of 1</span>
-          </div>
-
-          {/* PDF Viewport Canvas Area */}
-          <div className="flex-1 flex flex-col items-center justify-center p-4 bg-[var(--canvas)] overflow-auto">
-            <div className="w-[340px] h-[480px] bg-white rounded shadow-md border border-[var(--border-subtle)] flex flex-col items-center justify-center text-slate-800 p-6 text-center space-y-3">
-              <h2 className="text-base font-serif font-bold text-slate-900">Document Title</h2>
-              <p className="text-xs font-serif text-slate-600 italic">Author Name</p>
-              <div className="w-full border-t border-slate-200 my-2" />
-              <p className="text-[11px] font-serif text-slate-700 leading-relaxed text-left">
-                Double-buffered PDF.js canvas will render the compiled output here upon triggering compile.
-              </p>
-            </div>
-          </div>
+          <PdfViewport />
         </div>
       </div>
 
