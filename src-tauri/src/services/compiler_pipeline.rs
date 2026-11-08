@@ -327,10 +327,7 @@ pub fn clean_auxiliary_files(project_dir: &Path, root_filename: &str) -> Result<
     .collect();
 
     let mut removed = Vec::new();
-    let dirs_to_clean = [
-        project_dir.to_path_buf(),
-        project_dir.join(".leafforge"),
-    ];
+    let dirs_to_clean = [project_dir.to_path_buf(), project_dir.join(".leafforge")];
 
     for dir in &dirs_to_clean {
         if let Ok(entries) = std::fs::read_dir(dir) {
@@ -525,7 +522,15 @@ pub async fn execute_compilation(
     };
 
     // Clean up residual auxiliary files in project root if they now exist in .leafforge
-    let residual_exts = ["aux", "log", "synctex.gz", "synctex", "fls", "fdb_latexmk", "out"];
+    let residual_exts = [
+        "aux",
+        "log",
+        "synctex.gz",
+        "synctex",
+        "fls",
+        "fdb_latexmk",
+        "out",
+    ];
     for ext in residual_exts {
         let legacy_file = config.project_dir.join(format!("{root_stem}.{ext}"));
         let new_file = out_dir.join(format!("{root_stem}.{ext}"));
@@ -676,6 +681,9 @@ Content here
     fn test_preamble_cache_path() {
         let dir = PathBuf::from("/fake/project");
         let p = get_preamble_cache_path(&dir, "abcdef");
-        assert_eq!(p, PathBuf::from("/fake/project/.leafforge/preamble_abcdef.fmt"));
+        assert_eq!(
+            p,
+            PathBuf::from("/fake/project/.leafforge/preamble_abcdef.fmt")
+        );
     }
 }

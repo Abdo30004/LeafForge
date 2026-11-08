@@ -21,4 +21,3 @@ pub fn hide_path_on_windows(path: &Path) {
 
 #[cfg(not(windows))]
 pub fn hide_path_on_windows(_path: &Path) {}
-

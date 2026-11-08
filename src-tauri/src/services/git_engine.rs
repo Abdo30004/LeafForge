@@ -842,7 +842,10 @@ mod tests {
         // Update remote url
         GitEngine::set_remote(&tmp, None, "https://github.com/bob/new-url.git").unwrap();
         let updated_url = GitEngine::get_remote_url(&tmp, None).unwrap();
-        assert_eq!(updated_url.as_deref(), Some("https://github.com/bob/new-url.git"));
+        assert_eq!(
+            updated_url.as_deref(),
+            Some("https://github.com/bob/new-url.git")
+        );
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

@@ -33,7 +33,7 @@ export const dialog = {
 export function initCustomDialogs(): void {
   if (typeof window === 'undefined') return;
 
-  window.alert = (message?: any) => {
+  window.alert = (message?: unknown) => {
     dialog.alert(String(message ?? ''));
   };
 

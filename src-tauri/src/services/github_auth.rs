@@ -611,10 +611,9 @@ impl GithubAuthService {
             )));
         }
 
-        let r: RawRepoResponse = response
-            .json()
-            .await
-            .map_err(|e| AppError::Auth(format!("Failed to parse created GitHub repository: {e}")))?;
+        let r: RawRepoResponse = response.json().await.map_err(|e| {
+            AppError::Auth(format!("Failed to parse created GitHub repository: {e}"))
+        })?;
 
         Ok(GithubRepoSummary {
             id: r.id,
