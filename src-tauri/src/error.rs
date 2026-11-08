@@ -21,6 +21,15 @@ pub enum AppError {
     #[error("Watcher error: {0}")]
     Watcher(String),
 
+    #[error("Compiler error: {0}")]
+    Compiler(String),
+
+    #[error("SyncTeX error: {0}")]
+    SyncTex(String),
+
+    #[error("Font discovery error: {0}")]
+    Font(String),
+
     #[error("LSP error: {0}")]
     Lsp(String),
 
@@ -56,6 +65,9 @@ impl Serialize for AppError {
                 Some(fmt.clone()),
             ),
             AppError::Watcher(msg) => ("WATCHER_ERROR", msg.clone(), None),
+            AppError::Compiler(msg) => ("COMPILER_ERROR", msg.clone(), None),
+            AppError::SyncTex(msg) => ("SYNCTEX_ERROR", msg.clone(), None),
+            AppError::Font(msg) => ("FONT_ERROR", msg.clone(), None),
             AppError::Lsp(msg) => ("LSP_ERROR", msg.clone(), None),
             AppError::Internal(msg) => ("INTERNAL_ERROR", msg.clone(), None),
         };
