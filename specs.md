@@ -371,11 +371,11 @@ Execute the build strictly in the 6 phases below. At the end of every step, run 
   - *Commit:* `feat(ui): build 4-zone academic studio shell, file tree, and theme engine`
 
 ### Phase 2: Dual-Mode CodeMirror 6 Editor, Visual Mode Widgets & BiDi RTL Engine
-- [ ] **Step 2.1:** Build `LatexEditor.tsx` with CodeMirror 6, LaTeX syntax highlighting, bracket matching, environment auto-closing (`\begin{X}` automatically inserts `\end{X}`), and document outline extraction (`OutlinePanel.tsx`).
+- [x] **Step 2.1:** Build `LatexEditor.tsx` with CodeMirror 6, LaTeX syntax highlighting, bracket matching, environment auto-closing (`\begin{X}` automatically inserts `\end{X}`), and document outline extraction (`OutlinePanel.tsx`).
   - *Commit:* `feat(editor): integrate codemirror 6 latex engine and live document outline`
-- [ ] **Step 2.2:** Implement `bidiIsolation.ts` providing automatic per-paragraph RTL detection (UAX #9) and inline LTR directional isolation (`unicode-bidi: isolate`) for LaTeX commands and math spans inside RTL lines. Add manual LTR/RTL paragraph override commands.
+- [x] **Step 2.2:** Implement `bidiIsolation.ts` providing automatic per-paragraph RTL detection (UAX #9) and inline LTR directional isolation (`unicode-bidi: isolate`) for LaTeX commands and math spans inside RTL lines. Add manual LTR/RTL paragraph override commands.
   - *Commit:* `feat(bidi): implement UAX #9 paragraph detector and LTR command isolation for RTL scripts`
-- [ ] **Step 2.3:** Implement `visualModePlugin.ts` and interactive widgets (`MathWidget.ts` with KaTeX, `SectionWidget.ts`, `TableWidget.ts`, `MacroCapsuleWidget.ts`) with seamless cursor-enter unfolding.
+- [x] **Step 2.3:** Implement `visualModePlugin.ts` and interactive widgets (`MathWidget.ts` with KaTeX, `SectionWidget.ts`, `TableWidget.ts`, `MacroCapsuleWidget.ts`) with seamless cursor-enter unfolding.
   - *Commit:* `feat(visual-mode): build inline katex math, section, table, and macro capsule widgets`
 
 ### Phase 3: Multi-Engine LaTeX Compiler, Log Parser, Double-Buffered PDF & SyncTeX
@@ -403,7 +403,7 @@ Execute the build strictly in the 6 phases below. At the end of every step, run 
   - *Commit:* `feat(reconciler): implement designated committer election and 3-way crdt-to-git bridge`
 
 ### Phase 6: LSP Integration (`TexLab`), Command Palette & End-to-End Verification
-- [ ] **Step 6.1:** Implement `lsp_supervisor.rs` and `lspClient.ts` to bridge `texlab` over JSON-RPC for instant `\cite{...}` BibTeX autocomplete, `\ref{...}` label lookup, and macro hover documentation.
+- [x] **Step 6.1:** Implement `lsp_supervisor.rs` and `lspClient.ts` to bridge `texlab` over JSON-RPC for instant `\cite{...}` BibTeX autocomplete, `\ref{...}` label lookup, and macro hover documentation.
   - *Commit:* `feat(lsp): bridge texlab language server for bibtex citation and macro completion`
 - [ ] **Step 6.2:** Build `CommandPalette.tsx` (`Cmd/Ctrl+K`) exposing all editor, compiler, Git, RTL, and collaboration actions, plus comprehensive unit and integration tests for log parsing, SyncTeX coordinate mapping, BiDi tokenization, and 3-way CRDT-Git merging.
   - *Commit:* `test(suite): add command palette and comprehensive unit tests for core engines`
