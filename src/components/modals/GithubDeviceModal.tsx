@@ -51,7 +51,7 @@ export const GithubDeviceModal: React.FC = () => {
 
   const clearTimers = useCallback(() => {
     if (pollTimerRef.current) {
-      clearInterval(pollTimerRef.current);
+      clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
     }
     if (countdownTimerRef.current) {
@@ -100,8 +100,26 @@ export const GithubDeviceModal: React.FC = () => {
               isPollingRef.current = false;
               clearTimers();
               setStatusText('Authentication successful! Loading profile...');
-              const profile = await getGithubUserProfile();
-              setUserProfile(profile);
+
+              let profile = pollRes.profile;
+              if (!profile) {
+                try {
+                  profile = await getGithubUserProfile();
+                } catch (e) {
+                  logger.warn('Auth', 'Failed to fetch user profile after auth', {
+                    error: formatErrorDetails(e),
+                  });
+                }
+              }
+
+              if (profile) {
+                setUserProfile(profile);
+                setStatusText(`Welcome, @${profile.username}!`);
+                logger.info('Auth', `Successfully authenticated as @${profile.username}`, profile);
+              } else {
+                logger.warn('Auth', 'Auth token acquired, but user profile could not be loaded');
+              }
+
               setTimeout(() => {
                 setOpen(false);
               }, 1200);

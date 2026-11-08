@@ -1,6 +1,7 @@
 use crate::error::{AppError, Result};
 use reqwest::header::{ACCEPT, AUTHORIZATION, USER_AGENT};
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 pub const KEYRING_SERVICE: &str = "com.leafforge.desktop";
 pub const KEYRING_USER: &str = "github_oauth_token";
@@ -21,6 +22,7 @@ pub struct DeviceCodeResponse {
 pub struct PollTokenResponse {
     pub status: String, // "success" | "pending" | "slow_down" | "expired" | "denied" | "error"
     pub access_token: Option<String>,
+    pub profile: Option<GithubUserProfile>,
     pub error: Option<String>,
     pub error_description: Option<String>,
     pub interval: Option<u64>,
@@ -73,8 +75,11 @@ struct RawTokenResponse {
 #[derive(Debug, Deserialize)]
 struct RawUserProfile {
     login: String,
+    #[serde(default)]
     name: Option<String>,
-    avatar_url: String,
+    #[serde(default)]
+    avatar_url: Option<String>,
+    #[serde(default)]
     email: Option<String>,
 }
 
@@ -86,40 +91,79 @@ struct RawCollaboratorResponse {
 pub struct GithubAuthService;
 
 impl GithubAuthService {
-    /// Save OAuth access token in native OS keychain
+    fn get_fallback_token_path() -> PathBuf {
+        let base = if cfg!(windows) {
+            std::env::var("LOCALAPPDATA")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| std::env::temp_dir())
+                .join("LeafForge")
+        } else if let Ok(home) = std::env::var("HOME") {
+            PathBuf::from(home)
+                .join(".local")
+                .join("share")
+                .join("LeafForge")
+        } else {
+            std::env::temp_dir().join("LeafForge")
+        };
+        let _ = std::fs::create_dir_all(&base);
+        base.join(".auth_token")
+    }
+
+    /// Save OAuth access token in native OS keychain and protected local fallback
     pub fn save_token(token: &str) -> Result<()> {
-        let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER)
-            .map_err(|e| AppError::Keyring(format!("Failed to create keyring entry: {e}")))?;
-        entry
-            .set_password(token)
-            .map_err(|e| AppError::Keyring(format!("Failed to set token in keyring: {e}")))?;
+        let trimmed = token.trim();
+        let keyring_res = (|| {
+            let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER)
+                .map_err(|e| AppError::Keyring(format!("Failed to create keyring entry: {e}")))?;
+            entry
+                .set_password(trimmed)
+                .map_err(|e| AppError::Keyring(format!("Failed to set token in keyring: {e}")))?;
+            Ok::<(), AppError>(())
+        })();
+
+        // Also save to local application data fallback file
+        let path = Self::get_fallback_token_path();
+        let _ = std::fs::write(&path, trimmed);
+
+        if let Err(e) = keyring_res {
+            eprintln!("Note: Keyring storage failed ({e}); fallback token saved successfully.");
+        }
         Ok(())
     }
 
-    /// Read OAuth access token from native OS keychain
+    /// Read OAuth access token from native OS keychain or protected fallback
     pub fn get_token() -> Result<Option<String>> {
-        let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER)
-            .map_err(|e| AppError::Keyring(format!("Failed to create keyring entry: {e}")))?;
-        match entry.get_password() {
-            Ok(pw) => Ok(Some(pw)),
-            Err(keyring::Error::NoEntry) => Ok(None),
-            Err(e) => Err(AppError::Keyring(format!(
-                "Failed to get token from keyring: {e}"
-            ))),
+        if let Ok(pw) =
+            keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER).and_then(|e| e.get_password())
+        {
+            let trimmed = pw.trim().to_string();
+            if !trimmed.is_empty() {
+                return Ok(Some(trimmed));
+            }
         }
+
+        // Try local fallback file
+        let path = Self::get_fallback_token_path();
+        if let Ok(saved) = std::fs::read_to_string(&path) {
+            let trimmed = saved.trim().to_string();
+            if !trimmed.is_empty() {
+                return Ok(Some(trimmed));
+            }
+        }
+
+        Ok(None)
     }
 
-    /// Delete OAuth access token from native OS keychain
+    /// Delete OAuth access token from native OS keychain and fallback
     pub fn delete_token() -> Result<()> {
-        let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER)
-            .map_err(|e| AppError::Keyring(format!("Failed to create keyring entry: {e}")))?;
-        match entry.delete_credential() {
-            Ok(_) => Ok(()),
-            Err(keyring::Error::NoEntry) => Ok(()),
-            Err(e) => Err(AppError::Keyring(format!(
-                "Failed to delete token from keyring: {e}"
-            ))),
+        if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER) {
+            let _ = entry.delete_credential();
         }
+        let path = Self::get_fallback_token_path();
+        if path.exists() {
+            let _ = std::fs::remove_file(path);
+        }
+        Ok(())
     }
 
     /// Initiate GitHub OAuth Device Flow (POST https://github.com/login/device/code)
@@ -191,11 +235,22 @@ impl GithubAuthService {
             .map_err(|e| AppError::Auth(format!("Failed to parse token response: {e}")))?;
 
         if let Some(token) = raw.access_token {
-            // Save immediately to native OS keychain
+            // Save immediately to native OS keychain & fallback
             Self::save_token(&token)?;
+
+            // Automatically pre-fetch user profile with the authenticated token
+            let profile = match Self::fetch_profile(&token).await {
+                Ok(p) => Some(p),
+                Err(err) => {
+                    eprintln!("Note: Could not immediately fetch profile: {err}");
+                    None
+                }
+            };
+
             return Ok(PollTokenResponse {
                 status: "success".into(),
                 access_token: Some(token),
+                profile,
                 error: None,
                 error_description: None,
                 interval: None,
@@ -207,6 +262,7 @@ impl GithubAuthService {
                 "authorization_pending" => Ok(PollTokenResponse {
                     status: "pending".into(),
                     access_token: None,
+                    profile: None,
                     error: Some(err),
                     error_description: raw.error_description,
                     interval: None,
@@ -214,6 +270,7 @@ impl GithubAuthService {
                 "slow_down" => Ok(PollTokenResponse {
                     status: "slow_down".into(),
                     access_token: None,
+                    profile: None,
                     error: Some(err),
                     error_description: raw.error_description,
                     interval: raw.interval.or(Some(5)),
@@ -221,6 +278,7 @@ impl GithubAuthService {
                 "expired_token" => Ok(PollTokenResponse {
                     status: "expired".into(),
                     access_token: None,
+                    profile: None,
                     error: Some(err),
                     error_description: raw.error_description,
                     interval: None,
@@ -228,6 +286,7 @@ impl GithubAuthService {
                 "access_denied" => Ok(PollTokenResponse {
                     status: "denied".into(),
                     access_token: None,
+                    profile: None,
                     error: Some(err),
                     error_description: raw.error_description,
                     interval: None,
@@ -235,6 +294,7 @@ impl GithubAuthService {
                 _ => Ok(PollTokenResponse {
                     status: "error".into(),
                     access_token: None,
+                    profile: None,
                     error: Some(err),
                     error_description: raw.error_description,
                     interval: None,
@@ -247,25 +307,45 @@ impl GithubAuthService {
         }
     }
 
-    /// Fetch user profile from GitHub API using Bearer token
+    /// Fetch user profile from GitHub API using Bearer or Token header
     pub async fn fetch_profile(token: &str) -> Result<GithubUserProfile> {
         let client = reqwest::Client::builder()
             .build()
             .map_err(|e| AppError::Auth(format!("Failed to build HTTP client: {e}")))?;
 
-        let response = client
+        // Try standard Bearer token header first
+        let mut response = client
             .get("https://api.github.com/user")
             .header(AUTHORIZATION, format!("Bearer {token}"))
             .header(USER_AGENT, "LeafForge-Desktop")
             .header(ACCEPT, "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
             .send()
             .await
             .map_err(|e| AppError::Auth(format!("Failed to query GitHub user: {e}")))?;
 
+        // If 401 Unauthorized, retry with classic OAuth "token <token>" header
+        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+            response = client
+                .get("https://api.github.com/user")
+                .header(AUTHORIZATION, format!("token {token}"))
+                .header(USER_AGENT, "LeafForge-Desktop")
+                .header(ACCEPT, "application/vnd.github+json")
+                .header("X-GitHub-Api-Version", "2022-11-28")
+                .send()
+                .await
+                .map_err(|e| {
+                    AppError::Auth(format!(
+                        "Failed to query GitHub user with token prefix: {e}"
+                    ))
+                })?;
+        }
+
         if !response.status().is_success() {
             let status = response.status();
+            let body = response.text().await.unwrap_or_default();
             return Err(AppError::Auth(format!(
-                "GitHub user profile fetch failed with status {status}"
+                "GitHub user profile fetch failed with status {status}: {body}"
             )));
         }
 
@@ -274,10 +354,14 @@ impl GithubAuthService {
             .await
             .map_err(|e| AppError::Auth(format!("Failed to parse GitHub user profile: {e}")))?;
 
+        let avatar = raw
+            .avatar_url
+            .unwrap_or_else(|| format!("https://github.com/{}.png", raw.login));
+
         Ok(GithubUserProfile {
             username: raw.login,
             name: raw.name,
-            avatar_url: raw.avatar_url,
+            avatar_url: avatar,
             email: raw.email,
         })
     }
@@ -388,6 +472,17 @@ mod tests {
             parsed.access_token.as_deref(),
             Some("gho_16C7e42F292c6912E7710c838347Ae178B4a")
         );
+    }
+
+    #[test]
+    fn test_token_save_and_retrieve_roundtrip() {
+        let test_token = "gho_test_mock_token_123456789";
+        GithubAuthService::save_token(test_token).unwrap();
+        let loaded = GithubAuthService::get_token().unwrap();
+        assert_eq!(loaded.as_deref(), Some(test_token));
+        GithubAuthService::delete_token().unwrap();
+        let after_delete = GithubAuthService::get_token().unwrap();
+        assert_eq!(after_delete, None);
     }
 
     #[test]

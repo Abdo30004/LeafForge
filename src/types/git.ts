@@ -42,6 +42,7 @@ export interface AuthStatusResponse {
 export interface PollTokenResponse {
   status: 'success' | 'pending' | 'slow_down' | 'expired' | 'denied' | 'error';
   accessToken?: string;
+  profile?: GithubUserProfile | null;
   error?: string;
   errorDescription?: string;
   interval?: number;

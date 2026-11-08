@@ -305,9 +305,16 @@ export async function pollGithubDeviceToken(
   deviceCode: string
 ): Promise<PollTokenResponse> {
   if (!isTauriEnvironment()) {
+    const mockProfile: GithubUserProfile = {
+      username: 'octocat',
+      name: 'Mona Lisa Octocat',
+      avatarUrl: 'https://github.com/github.png',
+      email: 'octocat@github.com',
+    };
     return {
       status: 'success',
       accessToken: 'mock_gho_token',
+      profile: mockProfile,
     };
   }
   return invoke<PollTokenResponse>('poll_github_device_token', { clientId, deviceCode });
@@ -315,9 +322,16 @@ export async function pollGithubDeviceToken(
 
 export async function getGithubAuthStatus(): Promise<AuthStatusResponse> {
   if (!isTauriEnvironment()) {
+    let saved: GithubUserProfile | null = null;
+    try {
+      const raw = localStorage.getItem('leafforge:github-user-profile');
+      if (raw) saved = JSON.parse(raw) as GithubUserProfile;
+    } catch {
+      // ignore
+    }
     return {
-      authenticated: false,
-      profile: null,
+      authenticated: saved !== null,
+      profile: saved,
     };
   }
   return invoke<AuthStatusResponse>('get_github_auth_status');
@@ -325,6 +339,12 @@ export async function getGithubAuthStatus(): Promise<AuthStatusResponse> {
 
 export async function getGithubUserProfile(): Promise<GithubUserProfile | null> {
   if (!isTauriEnvironment()) {
+    try {
+      const raw = localStorage.getItem('leafforge:github-user-profile');
+      if (raw) return JSON.parse(raw) as GithubUserProfile;
+    } catch {
+      // ignore
+    }
     return null;
   }
   return invoke<GithubUserProfile | null>('get_github_user_profile');

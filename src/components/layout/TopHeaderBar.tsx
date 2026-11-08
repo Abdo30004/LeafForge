@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   FileCode2,
   Eye,
@@ -8,6 +8,10 @@ import {
   FolderOpen,
   Crown,
   Search,
+  ChevronDown,
+  LogOut,
+  ExternalLink,
+  ShieldCheck,
 } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { useCompilerStore } from '../../store/useCompilerStore';
@@ -19,6 +23,7 @@ import {
   listFiles,
   watchDirectory,
   getGithubAuthStatus,
+  logoutGithub,
 } from '../../services/tauriClient';
 import { formatErrorDetails } from '../../utils/formatError';
 import { logger } from '../../services/logger';
@@ -61,11 +66,51 @@ export const TopHeaderBar: React.FC<TopHeaderBarProps> = ({
   const followingPeerId = useCollabStore((s) => s.followingPeerId);
   const toggleFollowPeer = useCollabStore((s) => s.toggleFollowPeer);
 
-  React.useEffect(() => {
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close user dropdown popover on click outside or Escape
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setUserMenuOpen(false);
+      }
+    };
+
+    if (userMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [userMenuOpen]);
+
+  const handleSignOut = async () => {
+    try {
+      await logoutGithub();
+      setUserProfile(null);
+      setUserMenuOpen(false);
+      logger.info('Auth', 'User successfully signed out from GitHub');
+    } catch (e) {
+      logger.error('Auth', 'Sign out failed', { error: formatErrorDetails(e) });
+    }
+  };
+
+  useEffect(() => {
     getGithubAuthStatus()
       .then((status) => {
         if (status.authenticated && status.profile) {
           setUserProfile(status.profile);
+        } else if (!status.authenticated) {
+          // If token was revoked or deleted from OS keychain
+          setUserProfile(null);
         }
       })
       .catch((e) =>
@@ -265,23 +310,87 @@ export const TopHeaderBar: React.FC<TopHeaderBarProps> = ({
           </>
         )}
 
-        {/* GitHub Account / Sign In */}
+        {/* GitHub Account / Sign In with Profile Popover */}
         {userProfile ? (
-          <button
-            onClick={() => setDeviceModalOpen(true)}
-            className="flex items-center space-x-1.5 p-0.5 rounded-full hover:ring-2 hover:ring-accent-primary transition-all cursor-pointer"
-            title={`Signed in as @${userProfile.username}. Click to manage.`}
-          >
-            <img
-              src={userProfile.avatarUrl}
-              alt={userProfile.username}
-              className="w-6 h-6 rounded-full border border-accent-primary"
-            />
-          </button>
+          <div className="relative" ref={userMenuRef}>
+            <button
+              onClick={() => setUserMenuOpen((prev) => !prev)}
+              className="flex items-center space-x-1.5 px-2 py-1 rounded-md bg-[var(--hover-bg)] hover:bg-[var(--border-subtle)] border border-[var(--border-subtle)] transition-colors cursor-pointer text-xs group"
+              title={`Signed in as @${userProfile.username}. Click for account options.`}
+            >
+              <div className="relative flex items-center shrink-0">
+                <img
+                  src={userProfile.avatarUrl}
+                  alt={userProfile.username}
+                  className="w-5 h-5 rounded-full border border-emerald-400/50 object-cover"
+                />
+                <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-1 ring-[var(--surface-elevated)]" />
+              </div>
+              <span className="font-medium text-xs text-[var(--text-primary)] max-w-[110px] truncate">
+                @{userProfile.username}
+              </span>
+              <ChevronDown className={`w-3 h-3 text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Profile Dropdown Menu */}
+            {userMenuOpen && (
+              <div className="absolute right-0 top-9 z-50 w-64 bg-[var(--surface-elevated)] border border-[var(--border-subtle)] rounded-xl shadow-2xl p-3 space-y-3 animate-in fade-in zoom-in-95 duration-150">
+                {/* User Info Header */}
+                <div className="flex items-center space-x-3 pb-2.5 border-b border-[var(--border-subtle)]">
+                  <img
+                    src={userProfile.avatarUrl}
+                    alt={userProfile.username}
+                    className="w-10 h-10 rounded-full border border-accent-primary/50 shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center space-x-1">
+                      <span className="text-xs font-bold text-[var(--text-primary)] truncate">
+                        {userProfile.name || userProfile.username}
+                      </span>
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    </div>
+                    <p className="text-[11px] text-accent-primary font-mono truncate">
+                      @{userProfile.username}
+                    </p>
+                    {userProfile.email && (
+                      <p className="text-[10px] text-[var(--text-muted)] truncate">{userProfile.email}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-400 flex items-center space-x-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Authenticated via OS Keychain</span>
+                </div>
+
+                {/* Actions */}
+                <div className="space-y-1 pt-1">
+                  <button
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      setDeviceModalOpen(true);
+                    }}
+                    className="w-full text-left px-2 py-1.5 rounded hover:bg-[var(--hover-bg)] text-xs text-[var(--text-primary)] transition-colors flex items-center justify-between cursor-pointer"
+                  >
+                    <span>Account Details</span>
+                    <ExternalLink className="w-3 h-3 text-[var(--text-muted)]" />
+                  </button>
+
+                  <button
+                    onClick={handleSignOut}
+                    className="w-full text-left px-2 py-1.5 rounded bg-rose-500/10 hover:bg-rose-500/20 text-xs text-rose-400 hover:text-rose-300 transition-colors flex items-center space-x-2 cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span className="font-medium">Sign Out</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         ) : (
           <button
             onClick={() => setDeviceModalOpen(true)}
-            className="flex items-center space-x-1.5 px-2 py-1 rounded-md text-xs bg-[var(--hover-bg)] hover:bg-[var(--border-subtle)] text-[var(--text-primary)] transition-colors border border-[var(--border-subtle)] cursor-pointer"
+            className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs bg-[var(--hover-bg)] hover:bg-[var(--border-subtle)] text-[var(--text-primary)] transition-colors border border-[var(--border-subtle)] cursor-pointer"
             title="Sign in with GitHub"
           >
             <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5" aria-hidden="true">
@@ -291,7 +400,7 @@ export const TopHeaderBar: React.FC<TopHeaderBarProps> = ({
                 d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
               />
             </svg>
-            <span className="hidden sm:inline">Sign In</span>
+            <span className="font-medium">Sign in</span>
           </button>
         )}
 

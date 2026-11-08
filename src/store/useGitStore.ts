@@ -24,6 +24,18 @@ export interface GitState {
   setDeviceModalOpen: (open: boolean) => void;
 }
 
+const SAVED_PROFILE_KEY = 'leafforge:github-user-profile';
+
+const loadSavedProfile = (): GithubUserProfile | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const saved = localStorage.getItem(SAVED_PROFILE_KEY);
+    return saved ? (JSON.parse(saved) as GithubUserProfile) : null;
+  } catch {
+    return null;
+  }
+};
+
 export const useGitStore = create<GitState>((set) => ({
   branch: 'main',
   isClean: true,
@@ -31,12 +43,25 @@ export const useGitStore = create<GitState>((set) => ({
   behind: 0,
   staged: [],
   unstaged: [],
-  userProfile: null,
+  userProfile: loadSavedProfile(),
   deviceModalOpen: false,
 
   setBranch: (branch) => set({ branch }),
   setGitStatus: (branch, isClean, ahead, behind, staged, unstaged) =>
     set({ branch, isClean, ahead, behind, staged, unstaged }),
-  setUserProfile: (userProfile) => set({ userProfile }),
+  setUserProfile: (userProfile) => {
+    try {
+      if (typeof window !== 'undefined') {
+        if (userProfile) {
+          localStorage.setItem(SAVED_PROFILE_KEY, JSON.stringify(userProfile));
+        } else {
+          localStorage.removeItem(SAVED_PROFILE_KEY);
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+    set({ userProfile });
+  },
   setDeviceModalOpen: (deviceModalOpen) => set({ deviceModalOpen }),
 }));

@@ -9,6 +9,9 @@ import {
 
 describe('GitHub OAuth & Device Flow Store & Client', () => {
   beforeEach(() => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.clear();
+    }
     useGitStore.setState({
       branch: 'main',
       isClean: true,
