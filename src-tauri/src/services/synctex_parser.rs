@@ -372,4 +372,23 @@ k1,5,1:6553600,13107200:655360
         assert_eq!(inv.file, "main.tex");
         assert_eq!(inv.line, 5);
     }
+
+    #[test]
+    fn test_unindexed_file_forward_search() {
+        let data = SyncTexData::parse_str(SAMPLE_SYNCTEX);
+        assert!(data.forward_search("nonexistent.tex", 1, 1).is_none());
+    }
+
+    #[test]
+    fn test_inverse_search_page_without_records() {
+        let data = SyncTexData::parse_str(SAMPLE_SYNCTEX);
+        assert!(data.inverse_search(99, 100.0, 100.0).is_none());
+    }
+
+    #[test]
+    fn test_sp_to_pdf_pt_calculation() {
+        let data = SyncTexData::default();
+        let pt = sp_to_pdf_pt(65536.0, &data);
+        assert!((pt - 0.996264).abs() < 1e-4);
+    }
 }

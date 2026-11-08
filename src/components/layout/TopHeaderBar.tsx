@@ -8,6 +8,7 @@ import {
   FolderOpen,
   Sparkles,
   Crown,
+  Search,
 } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { useCompilerStore } from '../../store/useCompilerStore';
@@ -37,6 +38,7 @@ export const TopHeaderBar: React.FC<TopHeaderBarProps> = ({
   const setEditorMode = useWorkspaceStore((s) => s.setEditorMode);
   const theme = useWorkspaceStore((s) => s.theme);
   const toggleTheme = useWorkspaceStore((s) => s.toggleTheme);
+  const toggleCommandPalette = useWorkspaceStore((s) => s.toggleCommandPalette);
   const setWorkspacePath = useWorkspaceStore((s) => s.setWorkspacePath);
   const setFiles = useWorkspaceStore((s) => s.setFiles);
 
@@ -286,6 +288,19 @@ export const TopHeaderBar: React.FC<TopHeaderBarProps> = ({
         )}
 
         <div className="h-4 w-[1px] bg-[var(--border-subtle)]" />
+
+        {/* Command Palette Trigger */}
+        <button
+          onClick={() => toggleCommandPalette()}
+          className="flex items-center space-x-1.5 px-2 py-1 rounded-md text-xs bg-[var(--canvas)] border border-[var(--border-subtle)] hover:border-zinc-500 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+          title="Open Command Palette (Cmd/Ctrl+K)"
+        >
+          <Search className="w-3.5 h-3.5 text-accent-primary" />
+          <span className="hidden sm:inline">Commands</span>
+          <kbd className="hidden md:inline-block px-1 py-0.2 text-[9px] font-mono text-[var(--text-muted)] bg-[var(--surface-elevated)] border border-[var(--border-subtle)] rounded">
+            ⌘K
+          </kbd>
+        </button>
 
         {/* Theme Toggle */}
         <button
