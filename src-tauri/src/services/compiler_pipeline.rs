@@ -11,6 +11,18 @@ use tokio::process::Command;
 use tokio::sync::oneshot;
 use walkdir::WalkDir;
 
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+pub fn new_background_command<P: AsRef<std::ffi::OsStr>>(program: P) -> Command {
+    let mut cmd = Command::new(program);
+    #[cfg(windows)]
+    {
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
+
 pub const DEFAULT_COMPILE_TIMEOUT_SECS: u64 = 60;
 
 static MAGIC_PROGRAM_REGEX: LazyLock<Regex> = LazyLock::new(|| {
@@ -239,7 +251,7 @@ pub fn find_binary_on_system(binary_name: &str) -> Option<PathBuf> {
 }
 
 pub async fn query_engine_version(binary_path: &Path) -> Option<String> {
-    let output = Command::new(binary_path)
+    let output = new_background_command(binary_path)
         .arg("--version")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -369,7 +381,7 @@ pub async fn execute_compilation(
     let expected_synctex_gz = config.project_dir.join(format!("{root_stem}.synctex.gz"));
     let expected_synctex = config.project_dir.join(format!("{root_stem}.synctex"));
 
-    let mut cmd = Command::new(&bin_path);
+    let mut cmd = new_background_command(&bin_path);
     cmd.current_dir(&config.project_dir);
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());

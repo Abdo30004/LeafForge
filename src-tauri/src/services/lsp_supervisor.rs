@@ -1,11 +1,12 @@
 use crate::error::{AppError, Result};
+use crate::services::compiler_pipeline::new_background_command;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, ChildStdin, Command};
+use tokio::process::{Child, ChildStdin};
 use tokio::sync::{Mutex, mpsc, oneshot};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,7 +70,7 @@ impl LspSupervisor {
         self.root_path = root_path.clone();
 
         // Check if texlab binary is available
-        let texlab_available = Command::new("texlab")
+        let texlab_available = new_background_command("texlab")
             .arg("--version")
             .output()
             .await
@@ -107,7 +108,7 @@ impl LspSupervisor {
     }
 
     async fn spawn_texlab_process(&mut self) -> Result<()> {
-        let mut child = Command::new("texlab")
+        let mut child = new_background_command("texlab")
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
