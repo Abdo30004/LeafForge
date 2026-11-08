@@ -1,17 +1,31 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as Y from 'yjs';
 import { yCollab } from 'y-codemirror.next';
 import { collabManager } from '../services/collabManager';
 import { useCollabStore } from '../store/useCollabStore';
 import { useWorkspaceStore } from '../store/useWorkspaceStore';
+import { useGitStore } from '../store/useGitStore';
+import { parseGithubOwnerRepo } from '../services/tauriClient';
+import * as tauriClient from '../services/tauriClient';
 
 describe('Yjs CRDT Engine & CollabManager Test Suite', () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
+
     useWorkspaceStore.setState({
       workspacePath: '/mock/workspace/project',
       activeFilePath: '/mock/workspace/project/main.tex',
       fileContents: {
-        '/mock/workspace/project/main.tex': '\\documentclass{article}\n\\begin{document}\nHello World\n\\end{document}',
+        '/mock/workspace/project/main.tex':
+          '\\documentclass{article}\n\\begin{document}\nHello World\n\\end{document}',
+      },
+    });
+
+    useGitStore.setState({
+      userProfile: {
+        username: 'alice',
+        avatarUrl: 'https://github.com/alice.png',
+        name: 'Alice',
       },
     });
 
@@ -21,7 +35,27 @@ describe('Yjs CRDT Engine & CollabManager Test Suite', () => {
       peers: [],
       designatedCommitterId: null,
       followingPeerId: null,
+      userPermission: null,
+      canWrite: true,
+      isCommitter: false,
+      activeConflict: null,
     });
+  });
+
+  it('parses GitHub owner and repository from HTTPS and SSH URLs', () => {
+    expect(parseGithubOwnerRepo('https://github.com/torvalds/linux.git')).toEqual({
+      owner: 'torvalds',
+      repo: 'linux',
+    });
+    expect(parseGithubOwnerRepo('https://github.com/overleaf/overleaf')).toEqual({
+      owner: 'overleaf',
+      repo: 'overleaf',
+    });
+    expect(parseGithubOwnerRepo('git@github.com:facebook/react.git')).toEqual({
+      owner: 'facebook',
+      repo: 'react',
+    });
+    expect(parseGithubOwnerRepo('invalid-url')).toBeNull();
   });
 
   it('manages Y.Doc instance and creates Y.Text for document files', () => {
@@ -59,7 +93,57 @@ describe('Yjs CRDT Engine & CollabManager Test Suite', () => {
     expect(state?.user?.activeFile).toBe('/mock/workspace/project/main.tex');
   });
 
-  it('elects Designated Committer as peer with minimal (joinedAt, clientId)', () => {
+  it('enforces GitHub collaborator permission gate (admin/write vs read vs none)', async () => {
+    // 1. Admin/Write permission -> Read-write access
+    vi.spyOn(tauriClient, 'verifyRepoCollaborator').mockResolvedValueOnce({
+      permission: 'write',
+      canWrite: true,
+      canRead: true,
+    });
+
+    await collabManager.connect('/mock/workspace/project', {
+      owner: 'academics',
+      repo: 'nature-paper',
+    });
+
+    expect(useCollabStore.getState().status).toBe('connected');
+    expect(useCollabStore.getState().userPermission).toBe('write');
+    expect(useCollabStore.getState().canWrite).toBe(true);
+
+    // 2. Read-only permission -> canWrite is false
+    vi.spyOn(tauriClient, 'verifyRepoCollaborator').mockResolvedValueOnce({
+      permission: 'read',
+      canWrite: false,
+      canRead: true,
+    });
+
+    await collabManager.connect('/mock/workspace/project', {
+      owner: 'academics',
+      repo: 'nature-paper',
+    });
+
+    expect(useCollabStore.getState().status).toBe('connected');
+    expect(useCollabStore.getState().userPermission).toBe('read');
+    expect(useCollabStore.getState().canWrite).toBe(false);
+
+    // 3. Permission "none" -> Connection rejected with error
+    vi.spyOn(tauriClient, 'verifyRepoCollaborator').mockResolvedValueOnce({
+      permission: 'none',
+      canWrite: false,
+      canRead: false,
+    });
+
+    await expect(
+      collabManager.connect('/mock/workspace/project', {
+        owner: 'academics',
+        repo: 'nature-paper',
+      })
+    ).rejects.toThrow(/Permission denied/);
+
+    expect(useCollabStore.getState().status).toBe('disconnected');
+  });
+
+  it('elects Designated Committer only from ActiveWritePeers with minimal (joinedAt, clientId)', () => {
     const peers = [
       {
         clientId: 42,
@@ -67,13 +151,26 @@ describe('Yjs CRDT Engine & CollabManager Test Suite', () => {
         avatarUrl: 'alice.png',
         color: '#38bdf8',
         joinedAt: 1000,
+        permission: 'write' as const,
+        canWrite: true,
+      },
+      {
+        clientId: 5,
+        username: 'viewer-dave',
+        avatarUrl: 'dave.png',
+        color: '#aaaaaa',
+        joinedAt: 100, // Joined earlier, BUT read-only -> CANNOT be elected
+        permission: 'read' as const,
+        canWrite: false,
       },
       {
         clientId: 15,
         username: 'bob',
         avatarUrl: 'bob.png',
         color: '#34d399',
-        joinedAt: 500, // Joined earlier -> should be elected leader
+        joinedAt: 500, // Joined earlier with write access -> should be elected leader
+        permission: 'admin' as const,
+        canWrite: true,
       },
       {
         clientId: 99,
@@ -81,10 +178,16 @@ describe('Yjs CRDT Engine & CollabManager Test Suite', () => {
         avatarUrl: 'charlie.png',
         color: '#f43f5e',
         joinedAt: 1500,
+        permission: 'write' as const,
+        canWrite: true,
       },
     ];
 
-    const sorted = [...peers].sort((a, b) => {
+    const activeWritePeers = peers.filter(
+      (p) => p.canWrite !== false && (p.permission === 'admin' || p.permission === 'write')
+    );
+
+    const sorted = [...activeWritePeers].sort((a, b) => {
       if (a.joinedAt !== b.joinedAt) return a.joinedAt - b.joinedAt;
       return a.clientId - b.clientId;
     });
@@ -102,5 +205,6 @@ describe('Yjs CRDT Engine & CollabManager Test Suite', () => {
     expect(useCollabStore.getState().roomId).toBeNull();
     expect(useCollabStore.getState().peers).toEqual([]);
     expect(useCollabStore.getState().designatedCommitterId).toBeNull();
+    expect(useCollabStore.getState().isCommitter).toBe(false);
   });
 });

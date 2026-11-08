@@ -519,6 +519,19 @@ impl GitEngine {
         Ok(())
     }
 
+    /// Get remote URL for origin or specified remote
+    pub fn get_remote_url(path: &Path, remote_name: Option<&str>) -> Result<Option<String>> {
+        let repo = match Self::open(path) {
+            Ok(r) => r,
+            Err(_) => return Ok(None),
+        };
+        let r_name = remote_name.unwrap_or("origin");
+        match repo.find_remote(r_name) {
+            Ok(remote) => Ok(remote.url().map(String::from)),
+            Err(_) => Ok(None),
+        }
+    }
+
     /// 3-Way CRDT-to-Git Reconciliation Algorithm (Subsystem B.3)
     /// Merges (S_base, S_crdt, S_remote)
     pub fn reconcile_3way(
@@ -725,5 +738,17 @@ mod tests {
         assert!(result.has_conflicts);
         assert!(result.merged_text.contains("<<<<<<< LIVE SESSION (CRDT)"));
         assert!(result.merged_text.contains(">>>>>>> INCOMING GIT COMMIT"));
+    }
+
+    #[test]
+    fn test_git_get_remote_url() {
+        let tmp = std::env::temp_dir().join(format!("lf_remote_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir_all(&tmp).unwrap();
+        let repo = Repository::init(&tmp).unwrap();
+        assert!(GitEngine::get_remote_url(&tmp, None).unwrap().is_none());
+        repo.remote("origin", "https://github.com/alice/paper.git").unwrap();
+        let url = GitEngine::get_remote_url(&tmp, None).unwrap();
+        assert_eq!(url.as_deref(), Some("https://github.com/alice/paper.git"));
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }
