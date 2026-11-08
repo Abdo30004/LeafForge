@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.7] - 2026-11-08
+
+### Added
+- **High-DPI Retina PDF Preview:** Enabled high-fidelity super-sampled PDF rendering (`outputScale = max(dpr, 2.0)` with PDF.js vector transform scaling) completely eliminating pixelated text, blurry formulas, and fuzzy diagrams.
+- **Instant Double-Click & Ctrl+Click SyncTeX Navigation:** Added native double-click and Ctrl+Click inverse SyncTeX triggers on the PDF preview, with automatic relative-to-workspace path resolution and source code line/column jump.
+- **Configurable Compilation Timeout:** Added adjustable compilation timeout setting (`compileTimeoutSecs`, 10s–600s, default 90s) in both Global Settings and Project Settings override to prevent premature timeout aborts on heavy packages and CTAN downloads.
+- **Engine Optimization & Compilation Quality Modes:** Added 4-tier compilation modes (`Draft (Fastest)`, `Fast (Single Pass)`, `Normal (Standard)`, `Full (Multi-Pass)`) with `-draftmode` for pdfLaTeX and minimal chatter for Tectonic.
+- **Background Auto-Save Engine:** Configurable debounced auto-save (`autoSave: true`, `autoSaveDelayMs: 1000`) persisting modified files automatically in the background, with VS Code-style white dirty indicator dots on tab headers that switch to close icons on hover.
+- **Native Secondary Window Pop-out Preview:** Built dedicated Tauri `WebviewWindow` pop-out renderer (`open_detached_pdf_window`) opening an independent multi-monitor PDF preview window with zero pop-up blocking.
+- **Project Switching Safety & Unsaved Work Guard:** Added interactive protection modal warning users when attempting to switch workspaces while compilation is active or unsaved changes exist.
+- **Workspace State & Recent Projects Restoration:** Automatically remembers last opened workspaces, recent project history, and restores open editor tabs and active documents across app restarts like VS Code.
+
 ## [0.6.6] - 2026-11-08
 
 ### Added
