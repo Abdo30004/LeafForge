@@ -47,6 +47,9 @@ export const BuildLogDrawer: React.FC<BuildLogDrawerProps> = ({
 
   const toggleLogDrawer = useCompilerStore((s) => s.toggleLogDrawer);
   const setActiveLogTab = useCompilerStore((s) => s.setActiveLogTab);
+  const clearErrors = useCompilerStore((s) => s.clearErrors);
+  const clearWarnings = useCompilerStore((s) => s.clearWarnings);
+  const clearRawLog = useCompilerStore((s) => s.clearRawLog);
 
   const setEditorJumpTarget = useWorkspaceStore((s) => s.setEditorJumpTarget);
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
@@ -116,6 +119,19 @@ export const BuildLogDrawer: React.FC<BuildLogDrawerProps> = ({
     } catch (e) {
       console.error('Failed to clean aux files:', e);
     }
+  };
+
+  const handleClearCurrent = async () => {
+    if (activeLogTab === 'errors') {
+      clearErrors();
+    } else if (activeLogTab === 'warnings') {
+      clearWarnings();
+    } else if (activeLogTab === 'raw') {
+      clearRawLog();
+    } else if (activeLogTab === 'appLogs') {
+      await clearAppLogs();
+    }
+    await handleCleanAux();
   };
 
   const handleJumpToDiagnostic = (diag: LatexDiagnostic) => {
@@ -217,9 +233,17 @@ export const BuildLogDrawer: React.FC<BuildLogDrawerProps> = ({
           )}
 
           <button
-            onClick={handleCleanAux}
-            title="Clean auxiliary compilation files (.aux, .log, .out)"
-            className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)]"
+            onClick={handleClearCurrent}
+            title={
+              activeLogTab === 'errors'
+                ? 'Clear compilation errors'
+                : activeLogTab === 'warnings'
+                  ? 'Clear compilation warnings'
+                  : activeLogTab === 'raw'
+                    ? 'Clear raw build log'
+                    : 'Clear application logs'
+            }
+            className="p-1 rounded text-[var(--text-muted)] hover:text-rose-400 hover:bg-[var(--border-subtle)] transition-colors cursor-pointer"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -246,6 +270,21 @@ export const BuildLogDrawer: React.FC<BuildLogDrawerProps> = ({
       <div className="flex-1 overflow-y-auto p-2 font-mono text-xs">
         {activeLogTab === 'errors' && (
           <div className="space-y-1.5">
+            {errors.length > 0 && (
+              <div className="flex items-center justify-between pb-1 mb-1 border-b border-[var(--border-subtle)]">
+                <span className="text-[11px] text-[var(--text-muted)]">
+                  {errors.length} {errors.length === 1 ? 'error' : 'errors'}
+                </span>
+                <button
+                  onClick={() => clearErrors()}
+                  className="flex items-center space-x-1 px-2 py-0.5 rounded bg-[var(--hover-bg)] hover:bg-rose-500/20 text-xs text-[var(--text-muted)] hover:text-rose-400 border border-[var(--border-subtle)] transition-colors cursor-pointer"
+                  title="Clear compilation errors"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Clear Errors</span>
+                </button>
+              </div>
+            )}
             {errors.length === 0 ? (
               <div className="text-[var(--text-muted)] p-4 text-center">No compilation errors.</div>
             ) : (
@@ -279,6 +318,21 @@ export const BuildLogDrawer: React.FC<BuildLogDrawerProps> = ({
 
         {activeLogTab === 'warnings' && (
           <div className="space-y-1.5">
+            {warnings.length > 0 && (
+              <div className="flex items-center justify-between pb-1 mb-1 border-b border-[var(--border-subtle)]">
+                <span className="text-[11px] text-[var(--text-muted)]">
+                  {warnings.length} {warnings.length === 1 ? 'warning' : 'warnings'}
+                </span>
+                <button
+                  onClick={() => clearWarnings()}
+                  className="flex items-center space-x-1 px-2 py-0.5 rounded bg-[var(--hover-bg)] hover:bg-amber-500/20 text-xs text-[var(--text-muted)] hover:text-amber-300 border border-[var(--border-subtle)] transition-colors cursor-pointer"
+                  title="Clear compilation warnings"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Clear Warnings</span>
+                </button>
+              </div>
+            )}
             {warnings.length === 0 ? (
               <div className="text-[var(--text-muted)] p-4 text-center">No compilation warnings.</div>
             ) : (
@@ -307,15 +361,25 @@ export const BuildLogDrawer: React.FC<BuildLogDrawerProps> = ({
 
         {activeLogTab === 'raw' && (
           <div className="h-full flex flex-col space-y-1">
-            <div className="flex items-center space-x-1.5 px-2 py-1 bg-[var(--surface-app)] border border-[var(--border-subtle)] rounded">
-              <Search className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-              <input
-                type="text"
-                placeholder="Filter log..."
-                value={filterText}
-                onChange={(e) => setFilterText(e.target.value)}
-                className="bg-transparent border-none outline-none text-xs text-[var(--text-primary)] w-full font-mono placeholder:text-[var(--text-muted)]"
-              />
+            <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-1.5 px-2 py-1 bg-[var(--surface-app)] border border-[var(--border-subtle)] rounded flex-1">
+                <Search className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                <input
+                  type="text"
+                  placeholder="Filter log..."
+                  value={filterText}
+                  onChange={(e) => setFilterText(e.target.value)}
+                  className="bg-transparent border-none outline-none text-xs text-[var(--text-primary)] w-full font-mono placeholder:text-[var(--text-muted)]"
+                />
+              </div>
+              <button
+                onClick={() => clearRawLog()}
+                className="flex items-center space-x-1 px-2.5 py-1 rounded bg-[var(--hover-bg)] hover:bg-rose-500/20 text-xs text-[var(--text-muted)] hover:text-rose-400 border border-[var(--border-subtle)] transition-colors cursor-pointer shrink-0"
+                title="Clear raw compilation log"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Clear</span>
+              </button>
             </div>
             <pre className="flex-1 overflow-auto p-2 bg-[var(--surface-editor)] border border-[var(--border-subtle)] rounded text-[11px] leading-relaxed text-zinc-300 whitespace-pre font-mono">
               {filteredRawLog || 'No compilation output recorded yet.'}

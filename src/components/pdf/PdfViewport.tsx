@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useCompilerStore } from '../../store/useCompilerStore';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
-import { readFileBinary, synctexForward, synctexInverse, revealInExplorer } from '../../services/tauriClient';
+import { readFileBinary, synctexForward, synctexInverse, revealInExplorer, cleanPath } from '../../services/tauriClient';
 import { SyncTexOverlay } from './SyncTexOverlay';
 import { formatErrorDetails } from '../../utils/formatError';
 import { logger } from '../../services/logger';
@@ -150,13 +150,15 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
         return;
       }
 
+      const cleanPdfPath = cleanPath(pdfPath);
+
       try {
         let loadingTask: pdfjsLib.PDFDocumentLoadingTask;
 
         // Directly read raw binary bytes from disk to prevent URL parsing errors
         let binaryBytes: Uint8Array | null = null;
         try {
-          binaryBytes = await readFileBinary(pdfPath);
+          binaryBytes = await readFileBinary(cleanPdfPath);
         } catch {
           // Fallback if binary direct read is unavailable
         }
@@ -166,7 +168,7 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
         if (binaryBytes && binaryBytes.length > 0) {
           loadingTask = pdfjsLib.getDocument({ data: binaryBytes });
         } else {
-          loadingTask = pdfjsLib.getDocument({ url: pdfPath });
+          loadingTask = pdfjsLib.getDocument({ url: cleanPdfPath });
         }
 
         const doc = await loadingTask.promise;
@@ -374,9 +376,9 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
     try {
       let bytes: Uint8Array;
       try {
-        bytes = await readFileBinary(pdfPath);
+        bytes = await readFileBinary(cleanPath(pdfPath));
       } catch {
-        const resp = await fetch(pdfPath);
+        const resp = await fetch(cleanPath(pdfPath));
         const buf = await resp.arrayBuffer();
         bytes = new Uint8Array(buf);
       }
@@ -384,7 +386,7 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      const fileName = pdfPath.split(/[/\\]/).pop() || 'document.pdf';
+      const fileName = cleanPath(pdfPath).split(/[/\\]/).pop() || 'document.pdf';
       a.download = fileName;
       document.body.appendChild(a);
       a.click();
@@ -400,11 +402,21 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
   // Open PDF in default system desktop application
   const handleOpenExternal = async () => {
     if (!pdfPath) return;
+    const cleanPdfPath = cleanPath(pdfPath);
     try {
       const { openPath } = await import('@tauri-apps/plugin-opener');
-      await openPath(pdfPath);
+      await openPath(cleanPdfPath);
     } catch {
-      window.open(pdfPath, '_blank');
+      try {
+        const bytes = await readFileBinary(cleanPdfPath);
+        if (bytes && bytes.length > 0) {
+          const blob = new Blob([bytes], { type: 'application/pdf' });
+          const blobUrl = URL.createObjectURL(blob);
+          window.open(blobUrl, '_blank');
+        }
+      } catch (err) {
+        logger.error('PDF', 'Failed to open PDF externally', { error: formatErrorDetails(err) });
+      }
     }
   };
 

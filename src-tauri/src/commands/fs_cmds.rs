@@ -65,6 +65,7 @@ pub async fn open_folder(
     };
 
     let canonical = chosen_path.canonicalize().unwrap_or(chosen_path);
+    let canonical = crate::services::clean_path(canonical);
     let path_str = canonical.to_string_lossy().to_string();
 
     if let Ok(mut lock) = state.current_workspace.write() {

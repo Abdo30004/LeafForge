@@ -8,7 +8,7 @@ import {
   FileCode,
   File,
 } from 'lucide-react';
-import { readFileBinary } from '../../services/tauriClient';
+import { readFileBinary, openExternalPath, revealInExplorer } from '../../services/tauriClient';
 import { getFileExtension } from '../../utils/fileCategory';
 
 interface UnsupportedFilePreviewProps {
@@ -42,22 +42,11 @@ export const UnsupportedFilePreview: React.FC<UnsupportedFilePreviewProps> = ({ 
   };
 
   const handleOpenExternal = async () => {
-    try {
-      const { openPath } = await import('@tauri-apps/plugin-opener');
-      await openPath(filePath);
-    } catch {
-      // ignore
-    }
+    await openExternalPath(filePath);
   };
 
   const handleRevealInExplorer = async () => {
-    try {
-      const parentDir = filePath.replace(/[/\\][^/\\]+$/, '');
-      const { openPath } = await import('@tauri-apps/plugin-opener');
-      await openPath(parentDir);
-    } catch {
-      // ignore
-    }
+    await revealInExplorer(filePath);
   };
 
   const getFileIcon = () => {

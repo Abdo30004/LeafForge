@@ -1,4 +1,4 @@
-use crate::error::{AppError, Result};
+use crate::error::Result;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -86,7 +86,8 @@ impl AppLogger {
 
     /// Sets or appends to a project-specific log file when a workspace is opened
     pub fn set_workspace_path(&self, workspace_path: &Path) {
-        let cache_dir = workspace_path.join(".leafforge");
+        let clean_ws = crate::services::clean_path(workspace_path);
+        let cache_dir = clean_ws.join(".leafforge");
         let _ = create_dir_all(&cache_dir);
         crate::services::hide_path_on_windows(&cache_dir);
         let workspace_log = cache_dir.join("leafforge.log");
@@ -193,7 +194,11 @@ impl AppLogger {
         }
 
         if let Ok(path) = self.log_file_path.lock() {
-            File::create(&*path).map_err(AppError::Io)?;
+            let clean = crate::services::clean_path(&*path);
+            if let Some(parent) = clean.parent() {
+                let _ = create_dir_all(parent);
+            }
+            let _ = File::create(&clean);
         }
 
         Ok(())

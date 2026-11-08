@@ -558,6 +558,8 @@ pub async fn execute_compilation(
     };
 
     let duration = start_time.elapsed();
+    let expected_pdf = crate::services::clean_path(expected_pdf);
+    let synctex_path = synctex_path.map(crate::services::clean_path);
     Ok((exit_code, log_output, expected_pdf, synctex_path, duration))
 }
 

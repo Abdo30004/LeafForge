@@ -50,6 +50,10 @@ export interface CompilerState {
   setSystemFonts: (fonts: SystemFontInfo[]) => void;
   setFontFamilies: (families: string[]) => void;
   setActiveFontFamily: (family: string) => void;
+  clearErrors: () => void;
+  clearWarnings: () => void;
+  clearRawLog: () => void;
+  clearAllLogs: () => void;
   runCompile: () => Promise<void>;
 }
 
@@ -98,6 +102,20 @@ export const useCompilerStore = create<CompilerState>((set, get) => ({
   setSystemFonts: (systemFonts) => set({ systemFonts }),
   setFontFamilies: (fontFamilies) => set({ fontFamilies }),
   setActiveFontFamily: (activeFontFamily) => set({ activeFontFamily }),
+
+  clearErrors: () =>
+    set((state) => ({
+      diagnostics: state.diagnostics.filter((d) => d.severity !== 'error'),
+    })),
+
+  clearWarnings: () =>
+    set((state) => ({
+      diagnostics: state.diagnostics.filter((d) => d.severity !== 'warning'),
+    })),
+
+  clearRawLog: () => set({ rawLog: '' }),
+
+  clearAllLogs: () => set({ diagnostics: [], rawLog: '' }),
 
   runCompile: async () => {
     const ws = useWorkspaceStore.getState();

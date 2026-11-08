@@ -9,7 +9,7 @@ import {
   Image as ImageIcon,
   AlertCircle,
 } from 'lucide-react';
-import { readFileBinary } from '../../services/tauriClient';
+import { readFileBinary, openExternalPath } from '../../services/tauriClient';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { formatErrorDetails } from '../../utils/formatError';
 import { logger } from '../../services/logger';
@@ -103,8 +103,7 @@ export const ImagePreview: React.FC<ImagePreviewProps> = ({ filePath }) => {
 
   const handleOpenExternal = async () => {
     try {
-      const { openPath } = await import('@tauri-apps/plugin-opener');
-      await openPath(filePath);
+      await openExternalPath(filePath);
     } catch {
       if (blobUrl) window.open(blobUrl, '_blank');
     }

@@ -10,7 +10,7 @@ import {
   FileText,
   AlertCircle,
 } from 'lucide-react';
-import { readFileBinary } from '../../services/tauriClient';
+import { readFileBinary, cleanPath } from '../../services/tauriClient';
 import { formatErrorDetails } from '../../utils/formatError';
 import { logger } from '../../services/logger';
 
@@ -151,7 +151,7 @@ export const PdfDocumentPreview: React.FC<PdfDocumentPreviewProps> = ({ filePath
   const handleOpenExternal = async () => {
     try {
       const { openPath } = await import('@tauri-apps/plugin-opener');
-      await openPath(filePath);
+      await openPath(cleanPath(filePath));
     } catch {
       // ignore
     }

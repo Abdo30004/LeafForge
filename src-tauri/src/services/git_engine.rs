@@ -51,21 +51,24 @@ pub struct GitEngine;
 impl GitEngine {
     /// Checks whether the exact folder is an initialized Git repository
     pub fn is_repo(path: &Path) -> bool {
-        Repository::open(path).is_ok()
+        let clean = crate::services::clean_path(path);
+        Repository::open(&clean).is_ok()
     }
 
     /// Open an existing Git repository
     pub fn open(path: &Path) -> Result<Repository> {
-        Repository::discover(path)
+        let clean = crate::services::clean_path(path);
+        Repository::discover(&clean)
             .map_err(|e| AppError::Git(format!("Failed to open git repository: {e}")))
     }
 
     /// Sets or updates a remote URL on the repository (initializing if needed)
     pub fn set_remote(path: &Path, remote_name: Option<&str>, url: &str) -> Result<()> {
-        let repo = if Self::is_repo(path) {
-            Self::open(path)?
+        let clean = crate::services::clean_path(path);
+        let repo = if Self::is_repo(&clean) {
+            Self::open(&clean)?
         } else {
-            Self::init(path)?
+            Self::init(&clean)?
         };
         let r_name = remote_name.unwrap_or("origin");
         if repo.find_remote(r_name).is_ok() {
@@ -80,7 +83,8 @@ impl GitEngine {
 
     /// Initialize a new Git repository with main branch
     pub fn init(path: &Path) -> Result<Repository> {
-        let repo = Repository::init(path)
+        let clean = crate::services::clean_path(path);
+        let repo = Repository::init(&clean)
             .map_err(|e| AppError::Git(format!("Failed to init git repository: {e}")))?;
         // Set default branch name to main if possible
         let _ = repo.set_head("refs/heads/main");

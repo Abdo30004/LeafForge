@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Global Context Menu Suppression:** Captured and suppressed all browser default context menus across all elements (WebView2 / Web) while preserving custom LeafForge context menus.
 - **Compiler Output Path Hardening:** Normalized Windows verbatim extended paths (`\\?\`) so `.leafforge` is reliably tagged with OS hidden attributes.
 
+### Fixed
+- **Windows Verbatim Path Sanitization:** Sanitized extended-length `\\?\` prefixes returned by `canonicalize` across filesystem, git, compiler, and logging APIs.
+- **External PDF Preview & Download:** Fixed invalid URL SyntaxError (`file://%3F/...`) when opening PDFs externally or downloading them, with safe Blob fallback in WebView2.
+- **Log and Diagnostics Clearing:** Added dedicated clear buttons for compilation errors, warnings, raw build logs, and workspace application logs (`app_logger`).
+
 ### Removed
 - **Mock PDF Fallback Canvas:** Removed artificial mock PDF canvas rendering and sample paragraphs when no compiled PDF is available.
 - **Root Artifacts:** Removed duplicate `specs.md` and orphaned root `icon.png`.

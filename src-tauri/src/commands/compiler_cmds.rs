@@ -54,11 +54,14 @@ pub async fn abort_compilation(state: State<'_, AppState>) -> Result<bool> {
 
 #[tauri::command]
 pub async fn clean_aux_files(project_dir: String, root_file: String) -> Result<Vec<String>> {
-    let p_dir = PathBuf::from(&project_dir);
+    let p_dir = crate::services::clean_path(PathBuf::from(&project_dir));
+    let clean_root = crate::services::clean_path(PathBuf::from(&root_file))
+        .to_string_lossy()
+        .to_string();
     if !p_dir.exists() {
         return Err(AppError::NotFound(project_dir));
     }
-    clean_auxiliary_files(&p_dir, &root_file)
+    clean_auxiliary_files(&p_dir, &clean_root)
 }
 
 #[tauri::command]
@@ -69,7 +72,10 @@ pub async fn compile_document(
     use_preamble_cache: Option<bool>,
     state: State<'_, AppState>,
 ) -> Result<CompilationResult> {
-    let p_dir = PathBuf::from(&project_dir);
+    let p_dir = crate::services::clean_path(PathBuf::from(&project_dir));
+    let clean_root = crate::services::clean_path(PathBuf::from(&root_file))
+        .to_string_lossy()
+        .to_string();
     if !p_dir.exists() {
         return Err(AppError::NotFound(project_dir));
     }
@@ -115,7 +121,7 @@ pub async fn compile_document(
 
     let config = CompilationConfig {
         project_dir: p_dir.clone(),
-        root_file: root_file.clone(),
+        root_file: clean_root.clone(),
         engine: active_engine,
         use_preamble_cache: use_preamble_cache.unwrap_or(true),
         timeout_duration: Duration::from_secs(DEFAULT_COMPILE_TIMEOUT_SECS),

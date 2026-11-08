@@ -41,7 +41,7 @@ pub async fn clear_app_logs(state: State<'_, AppState>) -> Result<()> {
 
 #[tauri::command]
 pub async fn open_log_file(app: AppHandle, state: State<'_, AppState>) -> Result<()> {
-    let path = state.app_logger.get_log_file_path();
+    let path = crate::services::clean_path(state.app_logger.get_log_file_path());
     if !path.exists() {
         let _ = std::fs::File::create(&path);
     }

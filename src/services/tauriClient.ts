@@ -80,20 +80,26 @@ export async function duplicateFile(sourcePath: string): Promise<string> {
   return invoke<string>('duplicate_file', { sourcePath });
 }
 
+export function cleanPath(path: string): string {
+  if (!path) return '';
+  return path.replace(/^[/\\]+\?[/\\]+/, '').replace(/^\\\\\?\\/, '');
+}
+
 export async function revealInExplorer(targetPath: string): Promise<void> {
   if (!isTauriEnvironment()) return;
+  const cleaned = cleanPath(targetPath);
   try {
     const { revealItemInDir, openPath } = await import('@tauri-apps/plugin-opener');
     if (typeof revealItemInDir === 'function') {
-      await revealItemInDir(targetPath);
+      await revealItemInDir(cleaned);
       return;
     }
-    const parentDir = targetPath.replace(/[/\\][^/\\]+$/, '');
+    const parentDir = cleaned.replace(/[/\\][^/\\]+$/, '');
     await openPath(parentDir);
   } catch {
     try {
       const { openPath } = await import('@tauri-apps/plugin-opener');
-      await openPath(targetPath);
+      await openPath(cleaned);
     } catch {
       // ignore
     }
@@ -102,9 +108,10 @@ export async function revealInExplorer(targetPath: string): Promise<void> {
 
 export async function openExternalPath(targetPath: string): Promise<void> {
   if (!isTauriEnvironment()) return;
+  const cleaned = cleanPath(targetPath);
   try {
     const { openPath } = await import('@tauri-apps/plugin-opener');
-    await openPath(targetPath);
+    await openPath(cleaned);
   } catch {
     // ignore
   }
