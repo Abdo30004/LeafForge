@@ -2,6 +2,13 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { FileEntry, FsChangeEvent } from '../types/ipc';
 import type {
+  AuthStatusResponse,
+  CollaboratorPermission,
+  GithubDeviceCode,
+  GithubUserProfile,
+  PollTokenResponse,
+} from '../types/git';
+import type {
   CompilationResult,
   EngineInfo,
   LatexEngine,
@@ -270,4 +277,71 @@ export async function listFontFamilies(): Promise<string[]> {
     return ['Amiri', 'JetBrains Mono', 'Inter', 'Scheherazade New', 'Frank Ruhl Libre'];
   }
   return invoke<string[]>('list_font_families');
+}
+
+// GitHub OAuth Device Flow & Keychain Bridges
+export async function startGithubDeviceFlow(clientId?: string): Promise<GithubDeviceCode> {
+  if (!isTauriEnvironment()) {
+    return {
+      deviceCode: 'mock-device-code-12345',
+      userCode: 'WDJB-MJHT',
+      verificationUri: 'https://github.com/login/device',
+      expiresIn: 900,
+      interval: 5,
+    };
+  }
+  return invoke<GithubDeviceCode>('start_github_device_flow', { clientId });
+}
+
+export async function pollGithubDeviceToken(
+  clientId: string | undefined,
+  deviceCode: string
+): Promise<PollTokenResponse> {
+  if (!isTauriEnvironment()) {
+    return {
+      status: 'success',
+      accessToken: 'mock_gho_token',
+    };
+  }
+  return invoke<PollTokenResponse>('poll_github_device_token', { clientId, deviceCode });
+}
+
+export async function getGithubAuthStatus(): Promise<AuthStatusResponse> {
+  if (!isTauriEnvironment()) {
+    return {
+      authenticated: false,
+      profile: null,
+    };
+  }
+  return invoke<AuthStatusResponse>('get_github_auth_status');
+}
+
+export async function getGithubUserProfile(): Promise<GithubUserProfile | null> {
+  if (!isTauriEnvironment()) {
+    return null;
+  }
+  return invoke<GithubUserProfile | null>('get_github_user_profile');
+}
+
+export async function logoutGithub(): Promise<void> {
+  if (!isTauriEnvironment()) return;
+  return invoke<void>('logout_github');
+}
+
+export async function verifyRepoCollaborator(
+  owner: string,
+  repo: string,
+  username: string
+): Promise<CollaboratorPermission> {
+  if (!isTauriEnvironment()) {
+    return { permission: 'admin', canWrite: true, canRead: true };
+  }
+  return invoke<CollaboratorPermission>('verify_repo_collaborator', { owner, repo, username });
+}
+
+export async function getOrCreateRoomKey(projectDir: string): Promise<string> {
+  if (!isTauriEnvironment()) {
+    return '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+  }
+  return invoke<string>('get_or_create_room_key', { projectDir });
 }

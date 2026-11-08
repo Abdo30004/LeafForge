@@ -9,6 +9,7 @@ import { writeFileText, onFsChange } from '../../services/tauriClient';
 import { LatexEditor } from '../../editor/LatexEditor';
 import { PdfViewport } from '../pdf/PdfViewport';
 import { BuildLogDrawer } from '../diagnostics/BuildLogDrawer';
+import { GithubDeviceModal } from '../modals/GithubDeviceModal';
 import { X, FileCode, FileText, BookOpen, Image as ImageIcon } from 'lucide-react';
 
 export const AppShell: React.FC = () => {
@@ -213,6 +214,9 @@ export const AppShell: React.FC = () => {
 
       {/* 24px StatusBar */}
       <StatusBar />
+
+      {/* GitHub Device Flow Modal */}
+      <GithubDeviceModal />
     </div>
   );
 };

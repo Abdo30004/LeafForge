@@ -3,6 +3,10 @@ pub mod error;
 pub mod services;
 pub mod state;
 
+use commands::auth_cmds::{
+    get_github_auth_status, get_github_user_profile, get_or_create_room_key, logout_github,
+    poll_github_device_token, start_github_device_flow, verify_repo_collaborator,
+};
 use commands::compiler_cmds::{
     abort_compilation, clean_aux_files, compile_document, detect_engines, parse_magic_comments,
 };
@@ -50,6 +54,13 @@ pub fn run() {
             synctex_inverse,
             list_system_fonts,
             list_font_families,
+            start_github_device_flow,
+            poll_github_device_token,
+            get_github_auth_status,
+            get_github_user_profile,
+            logout_github,
+            verify_repo_collaborator,
+            get_or_create_room_key,
         ])
         .run(tauri::generate_context!())
         .expect("error while running leafforge application");
