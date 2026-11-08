@@ -408,6 +408,14 @@ Execute the build strictly in the 6 phases below. At the end of every step, run 
 - [x] **Step 6.2:** Build `CommandPalette.tsx` (`Cmd/Ctrl+K`) exposing all editor, compiler, Git, RTL, and collaboration actions, plus comprehensive unit and integration tests for log parsing, SyncTeX coordinate mapping, BiDi tokenization, and 3-way CRDT-Git merging.
   - *Commit:* `test(suite): add command palette and comprehensive unit tests for core engines`
 
+### Phase 7: Production-Grade Documentation Suite
+- [x] **Step 7.1:** Author `./docs/architecture.md` detailing the Tauri v2 Rust/TypeScript boundary, dual CodeMirror 6 BiDi/Visual editor engine, hybrid Tectonic/TeX Live compiler pool, native libgit2 bridge, and Yjs CRDT real-time sync network.
+- [x] **Step 7.2:** Author `./docs/security.md` providing a comprehensive threat model and deep dive into OS Keychain storage (`keyring-rs`), GitHub OAuth Device Flow (RFC 8628), repository permission gating, and WebRTC E2EE with Blake3 room keys.
+- [x] **Step 7.3:** Author `./docs/user-guide.md` covering complete A-to-Z user manual including cross-platform installation, GitHub auth, workspace management, live compilation, SyncTeX jumping, Arabic/Hebrew BiDi, real-time collaboration, and 3-way Git merges.
+- [x] **Step 7.4:** Author `./docs/developer-guide.md` detailing developer onboarding, toolchains, running `cargo check` and `pnpm test`, building release installers (.msi, .dmg, .AppImage), and codebase extension recipes.
+- [x] **Step 7.5:** Author `./docs/README.md` index hub cross-linking all guides with system architecture topology and core guarantees.
+  - *Commit:* `docs(suite): create comprehensive production-grade documentation suite`
+
 ---
 
 ## 8. Verification & Definition of Done Checklist
@@ -421,3 +429,4 @@ Before marking the project complete, verify and check off every criterion below:
 - [x] **RTL & BiDi Stability:** Typing mixed Arabic/Hebrew sentences containing `\cite{knuth1984}` and `$\alpha + \beta = \gamma$` maintains right-to-left paragraph flow while keeping the LaTeX command and math expression strictly left-to-right.
 - [x] **Auto-Compile & Flicker-Free PDF:** Saving or pausing typing for $400\text{ ms}$ triggers background compilation (`Tectonic`, `LuaLaTeX`, `XeLaTeX`, or `pdfLaTeX`), updates the PDF canvas via double-buffering with zero white flash, and supports two-way `Cmd/Ctrl+Click` SyncTeX jumping.
 - [x] **GitHub Device Auth & Git Sync:** User can authenticate via the 8-character GitHub Device Code, clone a repository, stage/commit/push changes via native `git2`, and reconcile external Git commits with live Yjs CRDT sessions without data loss.
+- [x] **Production Documentation Suite:** Complete, code-backed, cross-linked documentation suite generated in `./docs/` (`architecture.md`, `security.md`, `user-guide.md`, `developer-guide.md`, `README.md`).
