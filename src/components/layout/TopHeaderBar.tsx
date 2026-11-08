@@ -6,7 +6,6 @@ import {
   Sun,
   Moon,
   FolderOpen,
-  Sparkles,
   Crown,
   Search,
 } from 'lucide-react';
@@ -106,7 +105,7 @@ export const TopHeaderBar: React.FC<TopHeaderBarProps> = ({
       {/* Left: Branding & Project Path */}
       <div className="flex items-center space-x-3 min-w-0">
         <div className="flex items-center space-x-1.5 text-accent-primary font-bold text-sm tracking-tight">
-          <Sparkles className="w-4 h-4 text-accent-primary" />
+          <img src="/app-icon.png" alt="LeafForge" className="w-4 h-4 rounded-sm object-contain" />
           <span className="text-[var(--text-primary)] font-semibold">Leaf</span>
           <span className="text-accent-primary">Forge</span>
         </div>
