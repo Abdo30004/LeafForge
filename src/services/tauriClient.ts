@@ -488,3 +488,27 @@ export async function gitReconcile3Way(
   }
   return invoke<ReconcileResult>('git_reconcile_3way', { base, crdt, remote });
 }
+
+export async function gitGetRemoteUrl(
+  projectDir: string,
+  remoteName?: string
+): Promise<string | null> {
+  if (!isTauriEnvironment()) {
+    return null;
+  }
+  return invoke<string | null>('git_get_remote_url', { projectDir, remoteName });
+}
+
+export function parseGithubOwnerRepo(url: string): { owner: string; repo: string } | null {
+  if (!url) return null;
+  const trimmed = url.trim();
+  const httpsMatch = trimmed.match(/^https?:\/\/github\.com\/([^/]+)\/([^/.]+?)(?:\.git)?$/i);
+  if (httpsMatch && httpsMatch[1] && httpsMatch[2]) {
+    return { owner: httpsMatch[1], repo: httpsMatch[2] };
+  }
+  const sshMatch = trimmed.match(/^git@github\.com:([^/]+)\/([^/.]+?)(?:\.git)?$/i);
+  if (sshMatch && sshMatch[1] && sshMatch[2]) {
+    return { owner: sshMatch[1], repo: sshMatch[2] };
+  }
+  return null;
+}

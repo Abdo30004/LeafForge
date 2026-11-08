@@ -16,9 +16,9 @@ use commands::fs_cmds::{
     read_file_text, rename_path, unwatch_directory, watch_directory, write_file_text,
 };
 use commands::git_cmds::{
-    git_checkout_branch, git_clone, git_commit, git_diff, git_init, git_list_branches,
-    git_pull, git_push, git_reconcile_3way, git_stage, git_stage_all, git_status,
-    git_unstage, git_unstage_all,
+    git_checkout_branch, git_clone, git_commit, git_diff, git_get_remote_url, git_init,
+    git_list_branches, git_pull, git_push, git_reconcile_3way, git_stage, git_stage_all,
+    git_status, git_unstage, git_unstage_all,
 };
 use commands::lsp_cmds::{
     lsp_completion, lsp_did_change, lsp_did_open, lsp_hover, lsp_start, lsp_status, lsp_stop,
@@ -80,6 +80,7 @@ pub fn run() {
             git_list_branches,
             git_checkout_branch,
             git_reconcile_3way,
+            git_get_remote_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running leafforge application");

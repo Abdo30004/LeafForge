@@ -48,6 +48,7 @@ export const LatexEditor: React.FC<LatexEditorProps> = ({ className }) => {
 
   const diagnostics = useCompilerStore((s) => s.diagnostics);
   const collabStatus = useCollabStore((s) => s.status);
+  const canWrite = useCollabStore((s) => s.canWrite);
 
   const content = activeFilePath ? (fileContents[activeFilePath] ?? '') : '';
 
@@ -133,6 +134,8 @@ export const LatexEditor: React.FC<LatexEditorProps> = ({ className }) => {
       ...inlineDiagnostics(() => useCompilerStore.getState().diagnostics),
       ...lspClient(() => activeUri),
       ...visualModeExtensions(editorMode === 'visual'),
+      EditorState.readOnly.of(!canWrite),
+      EditorView.editable.of(canWrite),
       ...(collabStatus === 'connected' && collabManager.provider && activeFilePath
         ? [yCollab(collabManager.getYText(activeFilePath, content), collabManager.provider.awareness)]
         : []),
@@ -179,7 +182,7 @@ export const LatexEditor: React.FC<LatexEditorProps> = ({ className }) => {
       view.destroy();
       viewRef.current = null;
     };
-  }, [activeFilePath, collabStatus]);
+  }, [activeFilePath, collabStatus, canWrite]);
 
   // 2. Synchronize external content changes (e.g. from file watcher or Git)
   useEffect(() => {

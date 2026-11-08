@@ -1,10 +1,16 @@
 import * as Y from 'yjs';
 import { WebrtcProvider } from 'y-webrtc';
+import { WebsocketProvider } from 'y-websocket';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { useCollabStore } from '../store/useCollabStore';
 import { useGitStore } from '../store/useGitStore';
 import { useWorkspaceStore } from '../store/useWorkspaceStore';
-import { getOrCreateRoomKey } from './tauriClient';
+import {
+  getOrCreateRoomKey,
+  verifyRepoCollaborator,
+  gitGetRemoteUrl,
+  parseGithubOwnerRepo,
+} from './tauriClient';
 import type { PeerUser, PeerCursor } from '../types/collab';
 
 const PEER_COLORS = [
@@ -23,15 +29,27 @@ function getRandomColor(): string {
   return PEER_COLORS[index] ?? '#38bdf8';
 }
 
+export interface CollabConnectOptions {
+  customRoomId?: string;
+  owner?: string;
+  repo?: string;
+  signalingServers?: string[];
+  websocketUrl?: string;
+  skipPermissionCheck?: boolean;
+}
+
 export class CollabManager {
   private static instance: CollabManager | null = null;
 
   public doc: Y.Doc;
   public provider: WebrtcProvider | null = null;
+  public wsProvider: WebsocketProvider | null = null;
   public persistence: IndexeddbPersistence | null = null;
   public roomKey: string | null = null;
   public currentRoomId: string | null = null;
   public myColor: string;
+  public userPermission: 'admin' | 'write' | 'read' | 'none' = 'admin';
+  public canWrite = true;
 
   private constructor() {
     this.doc = new Y.Doc();
@@ -47,50 +65,118 @@ export class CollabManager {
 
   /**
    * Connect to collaborative room using public signaling encrypted by .texflow/room.key
+   * Secured by GitHub collaborator permission check (verify_repo_collaborator)
    */
-  public async connect(workspacePath: string, customRoomId?: string): Promise<string> {
+  public async connect(
+    workspacePath: string,
+    optionsOrRoomId?: string | CollabConnectOptions
+  ): Promise<string> {
     useCollabStore.getState().setStatus('connecting');
 
+    const opts: CollabConnectOptions =
+      typeof optionsOrRoomId === 'string'
+        ? { customRoomId: optionsOrRoomId }
+        : optionsOrRoomId || {};
+
     try {
-      // 1. Fetch or generate the 256-bit AES encryption key in .texflow/room.key
+      // Clean up previous providers if any
+      this.disconnect();
+
+      // 1. GitHub Collaborator Permission Gate (Subsystem A.3)
+      let owner = opts.owner;
+      let repo = opts.repo;
+
+      if (!owner || !repo) {
+        try {
+          const remoteUrl = await gitGetRemoteUrl(workspacePath);
+          if (remoteUrl) {
+            const parsed = parseGithubOwnerRepo(remoteUrl);
+            if (parsed) {
+              owner = parsed.owner;
+              repo = parsed.repo;
+            }
+          }
+        } catch (e) {
+          console.warn('Could not determine git remote URL:', e);
+        }
+      }
+
+      const userProfile = useGitStore.getState().userProfile;
+      let myPermission: 'admin' | 'write' | 'read' | 'none' = 'admin';
+      let myCanWrite = true;
+
+      if (owner && repo && !opts.skipPermissionCheck) {
+        const username = userProfile?.username;
+        if (!username) {
+          throw new Error(
+            `GitHub authentication required: Please sign in to collaborate on ${owner}/${repo}`
+          );
+        }
+
+        const perm = await verifyRepoCollaborator(owner, repo, username);
+        if (perm.permission === 'none' || (!perm.canRead && !perm.canWrite)) {
+          throw new Error(
+            `Permission denied: User @${username} does not have collaborator access to ${owner}/${repo}`
+          );
+        }
+
+        myPermission = perm.permission;
+        myCanWrite = perm.canWrite;
+      }
+
+      this.userPermission = myPermission;
+      this.canWrite = myCanWrite;
+      useCollabStore.getState().setUserPermission(myPermission, myCanWrite);
+
+      // 2. Fetch or generate the 256-bit AES encryption key in .texflow/room.key
       const key = await getOrCreateRoomKey(workspacePath);
       this.roomKey = key;
 
-      // 2. Generate room ID: custom ID or deterministic hash of workspace folder + key snippet
+      // 3. Generate room ID: custom ID or deterministic hash of workspace folder + key snippet
       const folderName = workspacePath.replace(/\\/g, '/').split('/').pop() || 'project';
-      const roomId = customRoomId || `leafforge-${folderName}-${key.slice(0, 8)}`;
+      const roomId = opts.customRoomId || `leafforge-${folderName}-${key.slice(0, 8)}`;
       this.currentRoomId = roomId;
-
-      // 3. Clean up previous provider if any
-      this.disconnect();
 
       // 4. Initialize IndexedDB offline cache persistence
       if (typeof window !== 'undefined' && 'indexedDB' in window) {
         this.persistence = new IndexeddbPersistence(roomId, this.doc);
       }
 
-      // 5. Initialize WebRTC Provider with public signaling (wss://signaling.yjs.dev) secured with AES-GCM
+      // 6. Initialize WebRTC Provider with public signaling secured with AES-GCM password
+      const signalingServers = opts.signalingServers || ['wss://signaling.yjs.dev'];
       this.provider = new WebrtcProvider(roomId, this.doc, {
-        signaling: ['wss://signaling.yjs.dev'],
+        signaling: signalingServers,
         password: key, // Secures WebRTC signaling channels with repo key
       });
 
-      // 6. Set local user awareness profile
-      const userProfile = useGitStore.getState().userProfile;
+      // 7. Optional WebSocket Provider if configured
+      if (opts.websocketUrl) {
+        try {
+          this.wsProvider = new WebsocketProvider(opts.websocketUrl, roomId, this.doc);
+        } catch (wsErr) {
+          console.warn('Failed to initialize WebSocket provider fallback:', wsErr);
+        }
+      }
+
+      // 8. Set local user awareness profile
       const initialActiveFile = useWorkspaceStore.getState().activeFilePath || undefined;
 
       this.provider.awareness.setLocalStateField('user', {
         clientId: this.doc.clientID,
+        name: userProfile?.username || `Researcher-${this.doc.clientID.toString().slice(-4)}`,
         username: userProfile?.username || `Researcher-${this.doc.clientID.toString().slice(-4)}`,
         avatarUrl:
           userProfile?.avatarUrl ||
           `https://api.dicebear.com/7.x/identicon/svg?seed=${this.doc.clientID}`,
         color: this.myColor,
+        colorLight: this.myColor + '33',
         joinedAt: Date.now(),
         activeFile: initialActiveFile,
+        permission: myPermission,
+        canWrite: myCanWrite,
       });
 
-      // 7. Subscribe to awareness changes for peer list & Designated Committer election
+      // 9. Subscribe to awareness changes for peer list & Designated Committer election
       this.provider.awareness.on('change', () => {
         this.handleAwarenessUpdate();
       });
@@ -118,7 +204,7 @@ export class CollabManager {
   /**
    * Handle awareness changes & elect deterministic Designated Committer (Subsystem B.2)
    */
-  private handleAwarenessUpdate(): void {
+  public handleAwarenessUpdate(): void {
     if (!this.provider) return;
 
     const states = this.provider.awareness.getStates();
@@ -134,6 +220,8 @@ export class CollabManager {
             activeFile?: string;
             cursor?: PeerCursor;
             joinedAt?: number;
+            permission?: 'admin' | 'write' | 'read' | 'none';
+            canWrite?: boolean;
           }
         | undefined;
 
@@ -146,22 +234,30 @@ export class CollabManager {
           activeFile: u.activeFile,
           cursor: u.cursor,
           joinedAt: u.joinedAt || 0,
+          permission: u.permission ?? 'write',
+          canWrite: u.canWrite ?? true,
         });
       }
     });
 
-    // Designated Committer Election:
+    // Designated Committer Election (Subsystem B.2):
     // Leader = argmin_{p in ActiveWritePeers} (p.joinedAt, p.clientId)
-    const sorted = [...peers].sort((a, b) => {
+    const activeWritePeers = peers.filter(
+      (p) => p.canWrite !== false && (p.permission === 'admin' || p.permission === 'write' || !p.permission)
+    );
+
+    const sorted = [...activeWritePeers].sort((a, b) => {
       if (a.joinedAt !== b.joinedAt) return a.joinedAt - b.joinedAt;
       return a.clientId - b.clientId;
     });
 
     const leader = sorted[0];
     const leaderId = leader ? leader.clientId : null;
+    const isCommitter = leaderId === this.doc.clientID;
 
     useCollabStore.getState().setPeers(peers);
     useCollabStore.getState().setDesignatedCommitterId(leaderId);
+    useCollabStore.getState().setIsCommitter(isCommitter);
 
     // Follow Peer logic: if we are following a peer, check their active file and cursor
     const followingId = useCollabStore.getState().followingPeerId;
@@ -220,15 +316,23 @@ export class CollabManager {
       this.provider.destroy();
       this.provider = null;
     }
+    if (this.wsProvider) {
+      this.wsProvider.destroy();
+      this.wsProvider = null;
+    }
     if (this.persistence) {
       this.persistence.destroy();
       this.persistence = null;
     }
     this.currentRoomId = null;
+    this.userPermission = 'admin';
+    this.canWrite = true;
     useCollabStore.getState().setStatus('disconnected');
     useCollabStore.getState().setRoomId(null);
     useCollabStore.getState().setPeers([]);
     useCollabStore.getState().setDesignatedCommitterId(null);
+    useCollabStore.getState().setIsCommitter(false);
+    useCollabStore.getState().setUserPermission(null, true);
   }
 }
 

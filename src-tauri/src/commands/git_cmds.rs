@@ -172,3 +172,16 @@ pub async fn git_reconcile_3way(
         .await
         .map_err(|e| AppError::Internal(format!("Spawn blocking failed: {e}")))?
 }
+
+#[tauri::command]
+pub async fn git_get_remote_url(
+    project_dir: String,
+    remote_name: Option<String>,
+) -> Result<Option<String>> {
+    tokio::task::spawn_blocking(move || {
+        let path = PathBuf::from(&project_dir);
+        GitEngine::get_remote_url(&path, remote_name.as_deref())
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Spawn blocking failed: {e}")))?
+}
