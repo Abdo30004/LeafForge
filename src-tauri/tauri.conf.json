@@ -26,12 +26,58 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "LeafForge Team",
+    "copyright": "Copyright © 2026 LeafForge Team. All rights reserved.",
+    "category": "DeveloperTool",
+    "shortDescription": "Modern High-Performance Offline-First LaTeX IDE",
+    "longDescription": "LeafForge is a modern, offline-first LaTeX IDE featuring instant TeX compilation, real-time dual-canvas PDF preview, Git-CRDT collaboration, and desktop ergonomics.",
+    "licenseFile": "../LICENSE",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["tex", "latex"],
+        "name": "LaTeX Document",
+        "description": "LaTeX Source Document",
+        "role": "Editor"
+      },
+      {
+        "ext": ["bib"],
+        "name": "BibTeX Database",
+        "description": "BibTeX Bibliography Database",
+        "role": "Editor"
+      },
+      {
+        "ext": ["cls"],
+        "name": "LaTeX Document Class",
+        "description": "LaTeX Document Class",
+        "role": "Editor"
+      },
+      {
+        "ext": ["sty"],
+        "name": "LaTeX Style Package",
+        "description": "LaTeX Style Package",
+        "role": "Editor"
+      }
+    ],
+    "windows": {
+      "wix": {
+        "language": ["en-US"],
+        "upgradeCode": "c97f1f7d-c4b6-4df1-8e5c-6e4d5885e359"
+      },
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "installMode": "both",
+        "startMenuFolder": "LeafForge",
+        "languages": ["English"],
+        "displayLanguageSelector": false
+      }
+    }
   }
 }
