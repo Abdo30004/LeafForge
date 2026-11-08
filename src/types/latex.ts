@@ -35,3 +35,43 @@ export interface CompilationResult {
   diagnostics: LatexDiagnostic[];
   logOutput: string;
 }
+
+export type OutlineItemType =
+  | 'part'
+  | 'chapter'
+  | 'section'
+  | 'subsection'
+  | 'subsubsection'
+  | 'paragraph'
+  | 'label'
+  | 'table'
+  | 'figure';
+
+export interface OutlineItem {
+  id: string;
+  type: OutlineItemType;
+  title: string;
+  line: number;
+  level: number;
+  label?: string;
+}
+
+export interface LspCompletionItem {
+  label: string;
+  kind?: string;
+  detail?: string;
+  documentation?: string;
+  insertText?: string;
+  insert_text?: string;
+}
+
+export interface LspHoverResult {
+  contents: string;
+}
+
+export interface LspStatus {
+  running: boolean;
+  server: string;
+  binary_found: boolean;
+  message: string;
+}
