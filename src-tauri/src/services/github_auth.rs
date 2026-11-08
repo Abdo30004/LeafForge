@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 pub const KEYRING_SERVICE: &str = "com.leafforge.desktop";
 pub const KEYRING_USER: &str = "github_oauth_token";
-pub const DEFAULT_CLIENT_ID: &str = "Ov23li3LeafForgeApp";
+pub const DEFAULT_CLIENT_ID: &str = "Ov23liBewGCwm3CNT7VH";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
