@@ -46,6 +46,7 @@ import { formatErrorMessage, formatErrorDetails } from '../../utils/formatError'
 import { logger } from '../../services/logger';
 import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 import { copyToClipboard } from '../../utils/clipboard';
+import { dialog } from '../../services/dialog';
 
 const getRelativePath = (fullPath: string, rootDir?: string | null): string => {
   if (!rootDir) return fullPath;
@@ -259,7 +260,14 @@ export const FileTreePanel: React.FC = () => {
   };
 
   const handleDelete = async (path: string) => {
-    if (!confirm(`Are you sure you want to delete ${path}?`)) return;
+    const fileName = path.split(/[/\\]/).pop() || path;
+    const confirmed = await dialog.confirm({
+      title: 'Delete Item',
+      message: `Are you sure you want to permanently delete "${fileName}"? This action cannot be undone.`,
+      confirmLabel: 'Delete',
+      isDestructive: true,
+    });
+    if (!confirmed) return;
     setErrorMsg(null);
     try {
       await deletePath(path);
@@ -300,7 +308,12 @@ export const FileTreePanel: React.FC = () => {
 
   const handleImportAsset = async (targetDirectory?: string) => {
     if (!workspacePath) return;
-    const source = prompt('Enter absolute path of image/asset to import (.png, .pdf, .eps):');
+    const source = await dialog.prompt({
+      title: 'Import Asset',
+      message: 'Enter absolute path of image or asset to import (.png, .pdf, .eps, .jpg):',
+      placeholder: 'C:\\path\\to\\figure.png',
+      confirmLabel: 'Import Asset',
+    });
     if (!source || !source.trim()) return;
     setErrorMsg(null);
     try {

@@ -390,13 +390,12 @@ pub async fn execute_compilation(
     // Hidden output directory for all compiler artifacts
     let out_dir = config.project_dir.join(".leafforge");
     let _ = std::fs::create_dir_all(&out_dir);
+    crate::services::hide_path_on_windows(&out_dir);
 
-    #[cfg(windows)]
-    {
-        let _ = std::process::Command::new("attrib")
-            .arg("+h")
-            .arg(&out_dir)
-            .output();
+    // Clean up legacy .leafforge-cache if present from older versions
+    let legacy_cache = config.project_dir.join(".leafforge-cache");
+    if legacy_cache.exists() {
+        let _ = std::fs::remove_dir_all(&legacy_cache);
     }
 
     let mut cmd = new_background_command(&bin_path);

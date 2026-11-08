@@ -97,7 +97,7 @@ describe('Git Control & Reconciliation Test Suite', () => {
   it('fetches user github repositories and supports creating new repo', async () => {
     const repos = await listGithubUserRepos();
     expect(repos.length).toBeGreaterThan(0);
-    expect(repos[0].fullName).toBe('octocat/latex-paper');
+    expect(repos[0]?.fullName).toBe('octocat/latex-paper');
 
     const created = await createGithubRepo('new-project', true, 'Test description');
     expect(created.name).toBe('new-project');

@@ -13,6 +13,7 @@ import { GithubDeviceModal } from '../modals/GithubDeviceModal';
 import { ConnectGithubModal } from '../modals/ConnectGithubModal';
 import { ConflictModal } from '../modals/ConflictModal';
 import { CommandPalette } from '../modals/CommandPalette';
+import { DialogModal } from '../modals/DialogModal';
 import { formatErrorDetails } from '../../utils/formatError';
 import { logger } from '../../services/logger';
 import { ImagePreview } from '../preview/ImagePreview';
@@ -61,15 +62,11 @@ export const AppShell: React.FC = () => {
   // Global suppression of default browser/webview context menu across desktop app
   useEffect(() => {
     const handleGlobalContextMenu = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-        return;
-      }
       e.preventDefault();
     };
 
-    window.addEventListener('contextmenu', handleGlobalContextMenu);
-    return () => window.removeEventListener('contextmenu', handleGlobalContextMenu);
+    window.addEventListener('contextmenu', handleGlobalContextMenu, { capture: true });
+    return () => window.removeEventListener('contextmenu', handleGlobalContextMenu, { capture: true });
   }, []);
 
   // Background file watcher integration: auto-compile on changes to TeX/bib/cls/sty
@@ -398,6 +395,9 @@ export const AppShell: React.FC = () => {
 
       {/* Cmd/Ctrl+K Global Command Palette */}
       <CommandPalette />
+
+      {/* LeafForge Global Alert / Confirm / Prompt Modal */}
+      <DialogModal />
 
       {/* Tab Context Menu */}
       {tabContextMenu && (

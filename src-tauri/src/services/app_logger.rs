@@ -88,13 +88,7 @@ impl AppLogger {
     pub fn set_workspace_path(&self, workspace_path: &Path) {
         let cache_dir = workspace_path.join(".leafforge");
         let _ = create_dir_all(&cache_dir);
-        #[cfg(windows)]
-        {
-            let _ = std::process::Command::new("attrib")
-                .arg("+h")
-                .arg(&cache_dir)
-                .output();
-        }
+        crate::services::hide_path_on_windows(&cache_dir);
         let workspace_log = cache_dir.join("leafforge.log");
         if let Ok(mut lock) = self.log_file_path.lock() {
             *lock = workspace_log;
