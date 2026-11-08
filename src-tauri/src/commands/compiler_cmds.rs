@@ -148,7 +148,10 @@ pub async fn compile_document(
                 state.app_logger.warn(
                     "Compiler",
                     &format!("Compilation finished with errors/warnings ({dur_ms}ms)"),
-                    Some(&format!("Exit code: {exit_code}, diagnostic count: {}", diagnostics.len())),
+                    Some(&format!(
+                        "Exit code: {exit_code}, diagnostic count: {}",
+                        diagnostics.len()
+                    )),
                 );
             } else {
                 state.app_logger.info(

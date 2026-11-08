@@ -2,7 +2,7 @@ use crate::error::{AppError, Result};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
-use std::fs::{create_dir_all, File, OpenOptions};
+use std::fs::{File, OpenOptions, create_dir_all};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -192,8 +192,7 @@ impl AppLogger {
         }
 
         if let Ok(path) = self.log_file_path.lock() {
-            File::create(&*path)
-                .map_err(|e| AppError::Io(e))?;
+            File::create(&*path).map_err(AppError::Io)?;
         }
 
         Ok(())
@@ -212,7 +211,11 @@ mod tests {
         logger.set_workspace_path(dir.path());
 
         logger.info("TestTarget", "Testing info log", None);
-        logger.error("TestTarget", "Testing error log", Some("Extra details stack"));
+        logger.error(
+            "TestTarget",
+            "Testing error log",
+            Some("Extra details stack"),
+        );
 
         let entries = logger.get_entries(Some(10));
         assert!(entries.len() >= 2);
