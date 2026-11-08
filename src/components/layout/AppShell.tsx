@@ -5,6 +5,7 @@ import { SidebarPanel } from './SidebarPanel';
 import { StatusBar } from './StatusBar';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { writeFileText } from '../../services/tauriClient';
+import { LatexEditor } from '../../editor/LatexEditor';
 import { X, FileCode, FileText, BookOpen, Image as ImageIcon } from 'lucide-react';
 
 export const AppShell: React.FC = () => {
@@ -13,11 +14,9 @@ export const AppShell: React.FC = () => {
   const fileContents = useWorkspaceStore((s) => s.fileContents);
   const dirtyFiles = useWorkspaceStore((s) => s.dirtyFiles);
   const pdfPanelWidth = useWorkspaceStore((s) => s.pdfPanelWidth);
-  const editorMode = useWorkspaceStore((s) => s.editorMode);
 
   const setActiveFile = useWorkspaceStore((s) => s.setActiveFile);
   const closeFile = useWorkspaceStore((s) => s.closeFile);
-  const updateFileContent = useWorkspaceStore((s) => s.updateFileContent);
   const markFileSaved = useWorkspaceStore((s) => s.markFileSaved);
   const setPdfPanelWidth = useWorkspaceStore((s) => s.setPdfPanelWidth);
 
@@ -76,8 +75,6 @@ export const AppShell: React.FC = () => {
       return <ImageIcon className="w-3.5 h-3.5 text-emerald-400 shrink-0" />;
     return <FileText className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />;
   };
-
-  const currentContent = activeFilePath ? (fileContents[activeFilePath] ?? '') : '';
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--canvas)] text-[var(--text-primary)]">
@@ -139,22 +136,8 @@ export const AppShell: React.FC = () => {
           {/* Editor Workspace Canvas */}
           <div className="flex-1 flex flex-col overflow-hidden relative">
             {activeFilePath ? (
-              <div className="flex-1 flex flex-col p-3 overflow-hidden">
-                <div className="flex items-center justify-between pb-2 text-[11px] text-[var(--text-muted)] font-mono">
-                  <span>
-                    Mode: <strong className="uppercase text-accent-primary">{editorMode}</strong> (Cmd+S to save)
-                  </span>
-                  {dirtyFiles[activeFilePath] && (
-                    <span className="text-amber-400 font-semibold">• Unsaved Changes</span>
-                  )}
-                </div>
-                <textarea
-                  value={currentContent}
-                  onChange={(e) => updateFileContent(activeFilePath, e.target.value)}
-                  placeholder="Enter LaTeX source code here..."
-                  className="flex-1 w-full p-3 font-mono text-xs bg-[var(--canvas)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] resize-none focus:outline-hidden focus:border-accent-primary"
-                  spellCheck={false}
-                />
+              <div className="flex-1 flex flex-col overflow-hidden relative">
+                <LatexEditor className="flex-1 w-full h-full" />
               </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-2">

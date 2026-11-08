@@ -3,7 +3,8 @@ import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { useGitStore } from '../../store/useGitStore';
 import { useCollabStore } from '../../store/useCollabStore';
 import { FileTreePanel } from '../sidebar/FileTreePanel';
-import { ListTree, GitBranch, Users, Settings } from 'lucide-react';
+import { OutlinePanel } from '../sidebar/OutlinePanel';
+import { GitBranch, Users, Settings } from 'lucide-react';
 
 export const SidebarPanel: React.FC = () => {
   const activeTab = useWorkspaceStore((s) => s.activeSidebarTab);
@@ -51,17 +52,7 @@ export const SidebarPanel: React.FC = () => {
       <div className="flex-1 overflow-hidden">
         {activeTab === 'files' && <FileTreePanel />}
 
-        {activeTab === 'outline' && (
-          <div className="flex flex-col h-full p-3 space-y-3">
-            <div className="flex items-center space-x-1.5 pb-2 border-b border-[var(--border-subtle)] text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-              <ListTree className="w-3.5 h-3.5" />
-              <span>Document Outline</span>
-            </div>
-            <p className="text-xs text-[var(--text-muted)]">
-              LaTeX section structure (\part, \chapter, \section, \subsection) will automatically populate here once a document is active.
-            </p>
-          </div>
-        )}
+        {activeTab === 'outline' && <OutlinePanel />}
 
         {activeTab === 'git' && (
           <div className="flex flex-col h-full p-3 space-y-3">

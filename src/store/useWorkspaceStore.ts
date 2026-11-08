@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { FileEntry } from '../types/ipc';
+import type { OutlineItem } from '../types/latex';
 
 export type SidebarTab = 'files' | 'outline' | 'git' | 'collab' | 'settings';
 export type EditorMode = 'raw' | 'visual';
@@ -19,6 +20,10 @@ export interface WorkspaceState {
   pdfPanelWidth: number;
   editorMode: EditorMode;
   theme: AppTheme;
+  cursorPosition: { line: number; col: number };
+  activeLineIsRtl: boolean;
+  outlineItems: OutlineItem[];
+  editorJumpTarget: { line: number; col?: number } | null;
 
   setWorkspacePath: (path: string | null) => void;
   setFiles: (files: FileEntry[]) => void;
@@ -35,6 +40,10 @@ export interface WorkspaceState {
   setEditorMode: (mode: EditorMode) => void;
   setTheme: (theme: AppTheme) => void;
   toggleTheme: () => void;
+  setCursorPosition: (pos: { line: number; col: number }) => void;
+  setActiveLineIsRtl: (isRtl: boolean) => void;
+  setOutlineItems: (items: OutlineItem[]) => void;
+  setEditorJumpTarget: (target: { line: number; col?: number } | null) => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
@@ -51,6 +60,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   pdfPanelWidth: 480,
   editorMode: 'raw',
   theme: 'dark',
+  cursorPosition: { line: 1, col: 1 },
+  activeLineIsRtl: false,
+  outlineItems: [],
+  editorJumpTarget: null,
 
   setWorkspacePath: (path) => set({ workspacePath: path }),
 
@@ -127,4 +140,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       }
       return { theme: next };
     }),
+
+  setCursorPosition: (pos) => set({ cursorPosition: pos }),
+
+  setActiveLineIsRtl: (isRtl) => set({ activeLineIsRtl: isRtl }),
+
+  setOutlineItems: (outlineItems) => set({ outlineItems }),
+
+  setEditorJumpTarget: (editorJumpTarget) => set({ editorJumpTarget }),
 }));
