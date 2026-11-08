@@ -15,12 +15,16 @@ use walkdir::WalkDir;
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 pub fn new_background_command<P: AsRef<std::ffi::OsStr>>(program: P) -> Command {
-    let mut cmd = Command::new(program);
     #[cfg(windows)]
     {
+        let mut cmd = Command::new(program);
         cmd.creation_flags(CREATE_NO_WINDOW);
+        cmd
     }
-    cmd
+    #[cfg(not(windows))]
+    {
+        Command::new(program)
+    }
 }
 
 pub const DEFAULT_COMPILE_TIMEOUT_SECS: u64 = 60;
