@@ -46,3 +46,9 @@ desktop.ini
 # Test & coverage
 coverage/
 *.lcov
+
+# Local quick-test build outputs
+/output/*
+!/output/build.ps1
+!/output/build.bat
+!/output/README.md
