@@ -13,14 +13,16 @@ use commands::compiler_cmds::{
 };
 use commands::font_cmds::{list_font_families, list_system_fonts};
 use commands::fs_cmds::{
-    create_dir, create_file, delete_path, duplicate_file, import_binary_asset, list_files,
-    open_folder, read_file_binary, read_file_text, rename_path, unwatch_directory, watch_directory,
-    write_file_text,
+    create_dir, create_file, delete_path, duplicate_file, get_global_settings,
+    get_project_settings, import_binary_asset, list_files, open_folder, open_in_default_app,
+    pick_and_import_assets, read_file_binary, read_file_text, rename_path, save_global_settings,
+    save_pdf_as, save_project_settings, unwatch_directory, watch_directory, write_file_text,
 };
 use commands::git_cmds::{
     git_checkout_branch, git_clone, git_commit, git_diff, git_get_remote_url, git_init,
-    git_is_repo, git_list_branches, git_pull, git_push, git_reconcile_3way, git_set_remote,
-    git_stage, git_stage_all, git_status, git_unstage, git_unstage_all,
+    git_is_repo, git_list_branches, git_log, git_pull, git_push, git_reconcile_3way,
+    git_remove_remote, git_set_remote, git_stage, git_stage_all, git_status, git_unstage,
+    git_unstage_all,
 };
 use commands::log_cmds::{
     clear_app_logs, get_log_file_path, get_recent_logs, open_log_file, write_log_entry,
@@ -92,6 +94,15 @@ pub fn run() {
             git_reconcile_3way,
             git_get_remote_url,
             git_set_remote,
+            git_remove_remote,
+            git_log,
+            open_in_default_app,
+            save_pdf_as,
+            pick_and_import_assets,
+            get_project_settings,
+            save_project_settings,
+            get_global_settings,
+            save_global_settings,
             write_log_entry,
             get_recent_logs,
             get_log_file_path,

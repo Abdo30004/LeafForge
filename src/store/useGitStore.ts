@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { GitFileStatus, GithubUserProfile } from '../types/git';
+import type { GitFileStatus, GithubUserProfile, GitCommitInfo } from '../types/git';
 
 export interface GitState {
   isRepo: boolean;
@@ -9,12 +9,16 @@ export interface GitState {
   behind: number;
   staged: GitFileStatus[];
   unstaged: GitFileStatus[];
+  remoteUrl: string | null;
+  commits: GitCommitInfo[];
   userProfile: GithubUserProfile | null;
   deviceModalOpen: boolean;
   connectModalOpen: boolean;
 
   setIsRepo: (isRepo: boolean) => void;
   setBranch: (branch: string) => void;
+  setRemoteUrl: (remoteUrl: string | null) => void;
+  setCommits: (commits: GitCommitInfo[]) => void;
   setGitStatus: (
     branch: string,
     isClean: boolean,
@@ -49,12 +53,16 @@ export const useGitStore = create<GitState>((set) => ({
   behind: 0,
   staged: [],
   unstaged: [],
+  remoteUrl: null,
+  commits: [],
   userProfile: loadSavedProfile(),
   deviceModalOpen: false,
   connectModalOpen: false,
 
   setIsRepo: (isRepo) => set({ isRepo }),
   setBranch: (branch) => set({ branch }),
+  setRemoteUrl: (remoteUrl) => set({ remoteUrl }),
+  setCommits: (commits) => set({ commits }),
   setGitStatus: (branch, isClean, ahead, behind, staged, unstaged, isRepo) =>
     set((state) => ({
       branch,

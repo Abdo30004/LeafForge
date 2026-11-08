@@ -1,4 +1,5 @@
 use crate::error::{AppError, Result};
+use crate::services::settings_engine::{GlobalSettings, ProjectSettings, SettingsEngine};
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -370,6 +371,169 @@ pub async fn unwatch_directory(state: State<'_, AppState>) -> Result<()> {
         *lock = None;
     }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn open_in_default_app(app: AppHandle, path: String) -> Result<()> {
+    let clean = crate::services::clean_path(PathBuf::from(&path));
+    if !clean.exists() {
+        return Err(AppError::NotFound(path));
+    }
+    let path_str = clean.to_string_lossy().to_string();
+
+    use tauri_plugin_opener::OpenerExt;
+    if app.opener().open_path(&path_str, None::<&str>).is_ok() {
+        return Ok(());
+    }
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        let mut wide: Vec<u16> = clean.as_os_str().encode_wide().collect();
+        wide.push(0);
+        let mut op: Vec<u16> = "open".encode_utf16().collect();
+        op.push(0);
+        unsafe {
+            unsafe extern "system" {
+                fn ShellExecuteW(
+                    hwnd: *mut std::ffi::c_void,
+                    lpOperation: *const u16,
+                    lpFile: *const u16,
+                    lpParameters: *const u16,
+                    lpDirectory: *const u16,
+                    nShowCmd: i32,
+                ) -> isize;
+            }
+            let res = ShellExecuteW(
+                std::ptr::null_mut(),
+                op.as_ptr(),
+                wide.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                1, // SW_SHOWNORMAL
+            );
+            if res > 32 {
+                return Ok(());
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open").arg(&clean).spawn();
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let _ = std::process::Command::new("xdg-open").arg(&clean).spawn();
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn save_pdf_as(
+    source_pdf_path: String,
+    default_file_name: Option<String>,
+) -> Result<Option<String>> {
+    let source = crate::services::clean_path(PathBuf::from(&source_pdf_path));
+    if !source.exists() {
+        return Err(AppError::NotFound(source_pdf_path));
+    }
+
+    let default_name = default_file_name.unwrap_or_else(|| {
+        source
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("document.pdf")
+            .to_string()
+    });
+
+    let mut dialog = rfd::AsyncFileDialog::new()
+        .set_title("Save PDF Document")
+        .set_file_name(&default_name)
+        .add_filter("PDF Document (*.pdf)", &["pdf"]);
+
+    if let Some(parent) = source.parent() {
+        dialog = dialog.set_directory(parent);
+    }
+
+    let handle = dialog.save_file().await;
+    match handle {
+        Some(file) => {
+            let dest_path = crate::services::clean_path(file.path());
+            std::fs::copy(&source, &dest_path).map_err(|e| {
+                AppError::Internal(format!(
+                    "Failed to save PDF to {}: {e}",
+                    dest_path.display()
+                ))
+            })?;
+            Ok(Some(dest_path.to_string_lossy().to_string()))
+        }
+        None => Ok(None),
+    }
+}
+
+#[tauri::command]
+pub async fn pick_and_import_assets(target_dir: String) -> Result<Vec<String>> {
+    let dest_dir = crate::services::clean_path(PathBuf::from(&target_dir));
+    std::fs::create_dir_all(&dest_dir)
+        .map_err(|e| AppError::Internal(format!("Failed to create destination directory: {e}")))?;
+
+    let files = rfd::AsyncFileDialog::new()
+        .set_title("Select Assets to Import")
+        .add_filter(
+            "Images & Documents (*.png, *.jpg, *.jpeg, *.pdf, *.eps, *.svg, *.webp)",
+            &[
+                "png", "jpg", "jpeg", "pdf", "eps", "svg", "webp", "tif", "tiff",
+            ],
+        )
+        .pick_files()
+        .await;
+
+    let mut imported = Vec::new();
+    if let Some(selected_files) = files {
+        for file in selected_files {
+            let source_path = crate::services::clean_path(file.path());
+            if let Some(file_name) = source_path.file_name() {
+                let target_path = dest_dir.join(file_name);
+                std::fs::copy(&source_path, &target_path).map_err(|e| {
+                    AppError::Internal(format!(
+                        "Failed to copy asset {}: {e}",
+                        source_path.display()
+                    ))
+                })?;
+                imported.push(file_name.to_string_lossy().to_string());
+            }
+        }
+    }
+
+    Ok(imported)
+}
+
+#[tauri::command]
+pub async fn get_project_settings(project_dir: String) -> Result<ProjectSettings> {
+    let path = PathBuf::from(&project_dir);
+    Ok(SettingsEngine::load_project_settings(&path))
+}
+
+#[tauri::command]
+pub async fn save_project_settings(
+    project_dir: String,
+    settings: ProjectSettings,
+) -> Result<ProjectSettings> {
+    let path = PathBuf::from(&project_dir);
+    SettingsEngine::save_project_settings(&path, &settings)
+}
+
+#[tauri::command]
+pub async fn get_global_settings() -> Result<GlobalSettings> {
+    Ok(SettingsEngine::load_global_settings())
+}
+
+#[tauri::command]
+pub async fn save_global_settings(settings: GlobalSettings) -> Result<GlobalSettings> {
+    SettingsEngine::save_global_settings(&settings)
 }
 
 #[cfg(test)]

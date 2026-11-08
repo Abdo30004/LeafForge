@@ -8,6 +8,9 @@ import {
   AlertCircle,
   Plus,
   RefreshCw,
+  Check,
+  ExternalLink,
+  Unlink,
 } from 'lucide-react';
 import { useGitStore } from '../../store/useGitStore';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
@@ -16,8 +19,14 @@ import {
   createGithubRepo,
   gitInit,
   gitSetRemote,
+  gitRemoveRemote,
+  gitGetRemoteUrl,
+  gitLog,
   gitStatus,
+  parseGithubOwnerRepo,
+  saveProjectSettings,
 } from '../../services/tauriClient';
+import { dialog } from '../../services/dialog';
 import type { GithubRepoSummary } from '../../types/git';
 import { formatErrorMessage, formatErrorDetails } from '../../utils/formatError';
 import { logger } from '../../services/logger';
@@ -39,6 +48,9 @@ export const ConnectGithubModal: React.FC = () => {
   const userProfile = useGitStore((s) => s.userProfile);
   const isRepo = useGitStore((s) => s.isRepo);
   const setGitStatus = useGitStore((s) => s.setGitStatus);
+  const remoteUrl = useGitStore((s) => s.remoteUrl);
+  const setRemoteUrl = useGitStore((s) => s.setRemoteUrl);
+  const setCommits = useGitStore((s) => s.setCommits);
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
 
   const [activeTab, setActiveTab] = useState<'existing' | 'new'>('existing');
@@ -46,6 +58,7 @@ export const ConnectGithubModal: React.FC = () => {
   const [loadingRepos, setLoadingRepos] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [connectingId, setConnectingId] = useState<number | null>(null);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // New repo fields
@@ -87,7 +100,14 @@ export const ConnectGithubModal: React.FC = () => {
     if (isOpen && userProfile) {
       fetchRepos();
     }
-  }, [isOpen, userProfile, fetchRepos]);
+    if (isOpen && workspacePath) {
+      gitGetRemoteUrl(workspacePath, 'origin')
+        .then((url) => {
+          setRemoteUrl(url);
+        })
+        .catch(() => {});
+    }
+  }, [isOpen, userProfile, workspacePath, setRemoteUrl, fetchRepos]);
 
   const handleConnectRepo = async (repo: GithubRepoSummary) => {
     if (!workspacePath) return;
@@ -98,11 +118,13 @@ export const ConnectGithubModal: React.FC = () => {
         await gitInit(workspacePath);
       }
       await gitSetRemote(workspacePath, repo.cloneUrl, 'origin');
+      setRemoteUrl(repo.cloneUrl);
+      saveProjectSettings(workspacePath, { gitRemote: repo.cloneUrl }).catch(() => {});
       logger.info('Git', `Successfully connected workspace to GitHub repository: ${repo.fullName}`, {
         repoUrl: repo.cloneUrl,
       });
 
-      // Refresh git status
+      // Refresh git status & commits
       const res = await gitStatus(workspacePath);
       setGitStatus(
         res.branch,
@@ -113,6 +135,8 @@ export const ConnectGithubModal: React.FC = () => {
         res.unstaged,
         res.isRepo ?? true
       );
+      const log = await gitLog(workspacePath, 20);
+      setCommits(log);
 
       setOpen(false);
     } catch (err) {
@@ -141,11 +165,13 @@ export const ConnectGithubModal: React.FC = () => {
         await gitInit(workspacePath);
       }
       await gitSetRemote(workspacePath, created.cloneUrl, 'origin');
+      setRemoteUrl(created.cloneUrl);
+      saveProjectSettings(workspacePath, { gitRemote: created.cloneUrl }).catch(() => {});
       logger.info('Git', `Created and connected new GitHub repository: ${created.fullName}`, {
         repoUrl: created.cloneUrl,
       });
 
-      // Refresh git status
+      // Refresh git status & commits
       const res = await gitStatus(workspacePath);
       setGitStatus(
         res.branch,
@@ -156,6 +182,8 @@ export const ConnectGithubModal: React.FC = () => {
         res.unstaged,
         res.isRepo ?? true
       );
+      const log = await gitLog(workspacePath, 20);
+      setCommits(log);
 
       setOpen(false);
     } catch (err) {
@@ -166,6 +194,44 @@ export const ConnectGithubModal: React.FC = () => {
       setErrorMsg(msg);
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleDisconnectRepo = async () => {
+    if (!workspacePath) return;
+    const ok = await dialog.confirm({
+      title: 'Disconnect from GitHub',
+      message:
+        'Are you sure you want to disconnect this workspace from GitHub? Remote origin will be removed; local commits will remain safe.',
+      confirmLabel: 'Disconnect',
+      isDestructive: true,
+    });
+    if (!ok) return;
+
+    setDisconnecting(true);
+    setErrorMsg(null);
+    try {
+      await gitRemoveRemote(workspacePath, 'origin');
+      setRemoteUrl(null);
+      saveProjectSettings(workspacePath, { gitRemote: null }).catch(() => {});
+      logger.info('Git', 'Disconnected workspace from GitHub remote repository');
+
+      const res = await gitStatus(workspacePath);
+      setGitStatus(
+        res.branch,
+        res.isClean,
+        res.ahead,
+        res.behind,
+        res.staged,
+        res.unstaged,
+        res.isRepo ?? true
+      );
+    } catch (err) {
+      const msg = formatErrorMessage(err, 'Failed to disconnect from GitHub');
+      logger.error('Git', 'Failed to disconnect repository', { error: formatErrorDetails(err) });
+      setErrorMsg(msg);
+    } finally {
+      setDisconnecting(false);
     }
   };
 
@@ -267,6 +333,47 @@ export const ConnectGithubModal: React.FC = () => {
                   </span>
                 </div>
               </div>
+
+              {/* Linked Repository Banner */}
+              {remoteUrl && (
+                <div className="p-3 rounded-lg bg-emerald-950/20 border border-emerald-500/40 flex items-center justify-between space-x-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center space-x-1.5 text-xs font-bold text-emerald-400">
+                      <GithubIcon className="w-4 h-4 text-emerald-400" />
+                      <span>Linked Repository</span>
+                    </div>
+                    <p className="font-mono text-xs text-[var(--text-primary)] truncate mt-0.5 font-medium">
+                      {parseGithubOwnerRepo(remoteUrl)
+                        ? `${parseGithubOwnerRepo(remoteUrl)?.owner}/${parseGithubOwnerRepo(remoteUrl)?.repo}`
+                        : remoteUrl}
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2 shrink-0">
+                    <a
+                      href={remoteUrl.replace(/\.git$/, '')}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-1.5 rounded hover:bg-emerald-500/20 text-emerald-400 cursor-pointer"
+                      title="Open on GitHub"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                    <button
+                      onClick={handleDisconnectRepo}
+                      disabled={disconnecting}
+                      className="px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 text-rose-300 font-semibold text-xs flex items-center space-x-1 cursor-pointer"
+                      title="Disconnect workspace from GitHub"
+                    >
+                      {disconnecting ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Unlink className="w-3.5 h-3.5" />
+                      )}
+                      <span>Disconnect</span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Tabs Switcher */}
               <div className="flex border-b border-[var(--border-subtle)] text-xs">
@@ -403,40 +510,70 @@ export const ConnectGithubModal: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setIsPrivate(true)}
-                      className={`p-2.5 rounded-lg border text-left flex items-start space-x-2 transition-colors ${
+                      className={`p-3 rounded-lg border-2 text-left flex items-start justify-between space-x-2 transition-all cursor-pointer ${
                         isPrivate
-                          ? 'border-accent-primary bg-accent-primary/10 text-accent-primary'
-                          : 'border-[var(--border-subtle)] hover:bg-[var(--hover-bg)] text-[var(--text-muted)]'
+                          ? 'border-emerald-500 bg-emerald-500/15 text-emerald-300 shadow-sm ring-1 ring-emerald-500/50'
+                          : 'border-[var(--border-subtle)] bg-[var(--canvas)]/40 hover:bg-[var(--hover-bg)] hover:border-zinc-500 text-[var(--text-muted)] opacity-70 hover:opacity-100'
                       }`}
                     >
-                      <Lock className="w-4 h-4 shrink-0 mt-0.5" />
-                      <div>
-                        <div className="text-xs font-semibold text-[var(--text-primary)]">
-                          Private
-                        </div>
-                        <div className="text-[10px] text-[var(--text-muted)]">
-                          Only you and collaborators can view
+                      <div className="flex items-start space-x-2">
+                        <Lock
+                          className={`w-4 h-4 shrink-0 mt-0.5 ${
+                            isPrivate ? 'text-emerald-400' : 'text-zinc-400'
+                          }`}
+                        />
+                        <div>
+                          <div
+                            className={`text-xs font-bold ${
+                              isPrivate ? 'text-emerald-300' : 'text-[var(--text-primary)]'
+                            }`}
+                          >
+                            Private
+                          </div>
+                          <div
+                            className={`text-[10px] ${
+                              isPrivate ? 'text-emerald-400/80 font-medium' : 'text-[var(--text-muted)]'
+                            }`}
+                          >
+                            Only you and collaborators
+                          </div>
                         </div>
                       </div>
+                      {isPrivate && <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />}
                     </button>
                     <button
                       type="button"
                       onClick={() => setIsPrivate(false)}
-                      className={`p-2.5 rounded-lg border text-left flex items-start space-x-2 transition-colors ${
+                      className={`p-3 rounded-lg border-2 text-left flex items-start justify-between space-x-2 transition-all cursor-pointer ${
                         !isPrivate
-                          ? 'border-accent-primary bg-accent-primary/10 text-accent-primary'
-                          : 'border-[var(--border-subtle)] hover:bg-[var(--hover-bg)] text-[var(--text-muted)]'
+                          ? 'border-emerald-500 bg-emerald-500/15 text-emerald-300 shadow-sm ring-1 ring-emerald-500/50'
+                          : 'border-[var(--border-subtle)] bg-[var(--canvas)]/40 hover:bg-[var(--hover-bg)] hover:border-zinc-500 text-[var(--text-muted)] opacity-70 hover:opacity-100'
                       }`}
                     >
-                      <Globe className="w-4 h-4 shrink-0 mt-0.5" />
-                      <div>
-                        <div className="text-xs font-semibold text-[var(--text-primary)]">
-                          Public
-                        </div>
-                        <div className="text-[10px] text-[var(--text-muted)]">
-                          Anyone on the internet can view
+                      <div className="flex items-start space-x-2">
+                        <Globe
+                          className={`w-4 h-4 shrink-0 mt-0.5 ${
+                            !isPrivate ? 'text-emerald-400' : 'text-zinc-400'
+                          }`}
+                        />
+                        <div>
+                          <div
+                            className={`text-xs font-bold ${
+                              !isPrivate ? 'text-emerald-300' : 'text-[var(--text-primary)]'
+                            }`}
+                          >
+                            Public
+                          </div>
+                          <div
+                            className={`text-[10px] ${
+                              !isPrivate ? 'text-emerald-400/80 font-medium' : 'text-[var(--text-muted)]'
+                            }`}
+                          >
+                            Anyone on the internet
+                          </div>
                         </div>
                       </div>
+                      {!isPrivate && <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />}
                     </button>
                   </div>
 

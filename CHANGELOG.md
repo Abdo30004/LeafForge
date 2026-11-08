@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-11-08
+
+### Added
+- **Global & Project Configuration Engine:** Implemented dual-layer settings architecture with global user preferences stored in AppData and project-level settings in `.leafforge/settings.json`, including compiler engines, font sizes, auto-compile intervals, and theme controls.
+- **Native Explorer File Dialog for PDF Downloads:** Replaced default browser `Downloads` dumping with native OS file dialog (`Save As`) allowing users to pick directories and customize output filenames.
+- **Native Multi-Asset Explorer Import:** Replaced full-path text prompt with native OS file explorer dialog supporting single and multi-file asset imports into the workspace.
+- **System Default PDF Viewer Launch:** Integrated native OS document launcher via `@tauri-apps/plugin-opener` with direct Win32 `ShellExecuteW` fallback for opening compiled PDFs in default desktop readers (Acrobat, SumatraPDF, browser, etc.).
+- **Git Commit History Telemetry:** Added visual commit log list in Source Control panel displaying commit hash badges, commit messages, author details, and timestamps.
+- **GitHub Connection State Persistence & Disconnect:** Workspace remote tracking persisted across app sessions; displays connected repository cards with remote URLs and one-click disconnect confirmation.
+
+### Changed
+- **Silent Background Compilation:** Completely eliminated flashing console/CMD windows on Windows by replacing external command invocations (`attrib.exe`) with direct Win32 `SetFileAttributesW` kernel syscalls.
+- **High-Contrast UI & Accessible Badges:** Enhanced visual contrast across UI controls including GitHub public/private selectors, Emerald commit buttons, push/pull indicators, and status badges.
+- **Git Sync Feedback & Distinct Spinners:** Added separate push and pull loading states with spinners and clear status feedback messages upon sync completion.
+
+### Fixed
+- **Infinite Untracked Changes Loop:** Fixed dirty git working tree loop caused by `leafforge.log` and `.leafforge/` internal build artifacts being tracked by git when no `.gitignore` exists. Built-in git ignore filter automatically shields internal metadata.
+
 ## [0.6.4] - 2026-11-08
 
 ### Added

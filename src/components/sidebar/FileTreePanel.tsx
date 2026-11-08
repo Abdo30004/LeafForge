@@ -39,6 +39,8 @@ import {
   revealInExplorer,
   openExternalPath,
   importBinaryAsset,
+  pickAndImportAssets,
+  isTauriEnvironment,
   onFsChange,
   watchDirectory,
 } from '../../services/tauriClient';
@@ -308,16 +310,26 @@ export const FileTreePanel: React.FC = () => {
 
   const handleImportAsset = async (targetDirectory?: string) => {
     if (!workspacePath) return;
-    const source = await dialog.prompt({
-      title: 'Import Asset',
-      message: 'Enter absolute path of image or asset to import (.png, .pdf, .eps, .jpg):',
-      placeholder: 'C:\\path\\to\\figure.png',
-      confirmLabel: 'Import Asset',
-    });
-    if (!source || !source.trim()) return;
     setErrorMsg(null);
     try {
       const destDir = targetDirectory ?? `${workspacePath.replace(/\\/g, '/')}/figures`;
+      if (isTauriEnvironment()) {
+        const imported = await pickAndImportAssets(destDir);
+        if (imported.length > 0) {
+          logger.info('FileSystem', `Imported ${imported.length} asset(s) into ${destDir}: ${imported.join(', ')}`);
+          await refreshTree();
+        }
+        return;
+      }
+
+      // Browser fallback prompt
+      const source = await dialog.prompt({
+        title: 'Import Asset',
+        message: 'Enter absolute path of image or asset to import (.png, .pdf, .eps, .jpg):',
+        placeholder: 'C:\\path\\to\\figure.png',
+        confirmLabel: 'Import Asset',
+      });
+      if (!source || !source.trim()) return;
       await importBinaryAsset(destDir, source.trim());
       logger.info('FileSystem', `Imported asset from ${source.trim()} into ${destDir}`);
       await refreshTree();
@@ -325,7 +337,6 @@ export const FileTreePanel: React.FC = () => {
       const msg = formatErrorMessage(err, 'Failed to import asset');
       logger.error('FileSystem', 'Failed to import asset', {
         error: formatErrorDetails(err),
-        source: source.trim(),
       });
       setErrorMsg(msg);
     }

@@ -6,6 +6,7 @@ pub mod git_engine;
 pub mod github_auth;
 pub mod log_parser;
 pub mod lsp_supervisor;
+pub mod settings_engine;
 pub mod synctex_parser;
 pub mod watcher;
 
@@ -23,11 +24,21 @@ pub fn clean_path<P: AsRef<Path>>(path: P) -> PathBuf {
 
 #[cfg(windows)]
 pub fn hide_path_on_windows(path: &Path) {
+    use std::os::windows::ffi::OsStrExt;
     let cleaned = clean_path(path);
-    let _ = std::process::Command::new("attrib")
-        .arg("+h")
-        .arg(&cleaned)
-        .output();
+    let mut wide: Vec<u16> = cleaned.as_os_str().encode_wide().collect();
+    wide.push(0);
+    unsafe {
+        unsafe extern "system" {
+            fn GetFileAttributesW(lpFileName: *const u16) -> u32;
+            fn SetFileAttributesW(lpFileName: *const u16, dwFileAttributes: u32) -> i32;
+        }
+        let attrs = GetFileAttributesW(wide.as_ptr());
+        if attrs != 0xFFFFFFFF {
+            // FILE_ATTRIBUTE_HIDDEN = 0x2
+            let _ = SetFileAttributesW(wide.as_ptr(), attrs | 0x2);
+        }
+    }
 }
 
 #[cfg(not(windows))]

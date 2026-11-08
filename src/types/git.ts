@@ -4,6 +4,15 @@ export interface GitFileStatus {
   status: 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked';
 }
 
+export interface GitCommitInfo {
+  hash: string;
+  shortHash: string;
+  message: string;
+  authorName: string;
+  authorEmail: string;
+  timestamp: number;
+}
+
 export interface GitRepoStatus {
   isRepo?: boolean;
   branch: string;

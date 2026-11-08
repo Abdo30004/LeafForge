@@ -1,0 +1,155 @@
+use crate::error::{AppError, Result};
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::{Path, PathBuf};
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectSettings {
+    pub root_file: Option<String>,
+    pub engine: Option<String>,
+    pub git_remote: Option<String>,
+    pub git_branch: Option<String>,
+    pub auto_compile: Option<bool>,
+    pub synctex_enabled: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalSettings {
+    pub theme: String, // "dark" | "light"
+    pub default_engine: String,
+    pub font_size: u32,
+    pub auto_compile_delay_ms: u64,
+}
+
+impl Default for GlobalSettings {
+    fn default() -> Self {
+        Self {
+            theme: "dark".to_string(),
+            default_engine: "tectonic".to_string(),
+            font_size: 14,
+            auto_compile_delay_ms: 1000,
+        }
+    }
+}
+
+pub struct SettingsEngine;
+
+impl SettingsEngine {
+    /// Load project settings from `<project_dir>/.leafforge/settings.json`
+    pub fn load_project_settings(project_dir: &Path) -> ProjectSettings {
+        let clean = crate::services::clean_path(project_dir);
+        let settings_path = clean.join(".leafforge").join("settings.json");
+        if settings_path.exists()
+            && let Ok(content) = fs::read_to_string(&settings_path)
+            && let Ok(settings) = serde_json::from_str::<ProjectSettings>(&content)
+        {
+            return settings;
+        }
+        ProjectSettings::default()
+    }
+
+    /// Save project settings to `<project_dir>/.leafforge/settings.json`
+    pub fn save_project_settings(
+        project_dir: &Path,
+        settings: &ProjectSettings,
+    ) -> Result<ProjectSettings> {
+        let clean = crate::services::clean_path(project_dir);
+        let out_dir = clean.join(".leafforge");
+        let _ = fs::create_dir_all(&out_dir);
+        crate::services::hide_path_on_windows(&out_dir);
+
+        let settings_path = out_dir.join("settings.json");
+        let json = serde_json::to_string_pretty(settings)
+            .map_err(|e| AppError::Internal(format!("Failed to serialize settings: {e}")))?;
+
+        fs::write(&settings_path, json)
+            .map_err(|e| AppError::Internal(format!("Failed to write settings file: {e}")))?;
+
+        Ok(settings.clone())
+    }
+
+    /// Determines the standard global user configuration directory
+    pub fn get_global_config_path() -> PathBuf {
+        #[cfg(windows)]
+        {
+            if let Ok(appdata) = std::env::var("APPDATA") {
+                return PathBuf::from(appdata)
+                    .join("LeafForge")
+                    .join("global_settings.json");
+            }
+            if let Ok(userprofile) = std::env::var("USERPROFILE") {
+                return PathBuf::from(userprofile)
+                    .join(".leafforge")
+                    .join("global_settings.json");
+            }
+        }
+
+        #[cfg(not(windows))]
+        {
+            if let Ok(home) = std::env::var("HOME") {
+                return PathBuf::from(home)
+                    .join(".config")
+                    .join("leafforge")
+                    .join("global_settings.json");
+            }
+        }
+
+        PathBuf::from("global_settings.json")
+    }
+
+    /// Load global settings
+    pub fn load_global_settings() -> GlobalSettings {
+        let path = Self::get_global_config_path();
+        if path.exists()
+            && let Ok(content) = fs::read_to_string(&path)
+            && let Ok(settings) = serde_json::from_str::<GlobalSettings>(&content)
+        {
+            return settings;
+        }
+        GlobalSettings::default()
+    }
+
+    /// Save global settings
+    pub fn save_global_settings(settings: &GlobalSettings) -> Result<GlobalSettings> {
+        let path = Self::get_global_config_path();
+        if let Some(parent) = path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        let json = serde_json::to_string_pretty(settings)
+            .map_err(|e| AppError::Internal(format!("Failed to serialize global settings: {e}")))?;
+
+        fs::write(&path, json).map_err(|e| {
+            AppError::Internal(format!("Failed to write global settings file: {e}"))
+        })?;
+
+        Ok(settings.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_project_settings_roundtrip() {
+        let tmp = tempdir().expect("tempdir");
+        let initial = SettingsEngine::load_project_settings(tmp.path());
+        assert_eq!(initial, ProjectSettings::default());
+
+        let updated = ProjectSettings {
+            root_file: Some("paper.tex".into()),
+            engine: Some("tectonic".into()),
+            git_remote: Some("https://github.com/user/paper.git".into()),
+            git_branch: Some("main".into()),
+            auto_compile: Some(true),
+            synctex_enabled: Some(true),
+        };
+
+        SettingsEngine::save_project_settings(tmp.path(), &updated).expect("save");
+        let loaded = SettingsEngine::load_project_settings(tmp.path());
+        assert_eq!(loaded, updated);
+    }
+}

@@ -16,7 +16,16 @@ import {
 } from 'lucide-react';
 import { useCompilerStore } from '../../store/useCompilerStore';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
-import { readFileBinary, synctexForward, synctexInverse, revealInExplorer, cleanPath } from '../../services/tauriClient';
+import {
+  readFileBinary,
+  synctexForward,
+  synctexInverse,
+  revealInExplorer,
+  cleanPath,
+  savePdfAs,
+  openInDefaultApp,
+  isTauriEnvironment,
+} from '../../services/tauriClient';
 import { SyncTexOverlay } from './SyncTexOverlay';
 import { formatErrorDetails } from '../../utils/formatError';
 import { logger } from '../../services/logger';
@@ -369,11 +378,23 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
     }
   };
 
-  // Save / Download PDF file
+  // Save / Download PDF file via native system dialog
   const handleDownloadPdf = async () => {
     if (!pdfPath) return;
     setDownloading(true);
     try {
+      const fileName = cleanPath(pdfPath).split(/[/\\]/).pop() || 'document.pdf';
+      const savedPath = await savePdfAs(pdfPath, fileName);
+      if (savedPath) {
+        logger.info('PDF', `Successfully exported PDF to: ${savedPath}`);
+        return;
+      }
+      if (savedPath === null && isTauriEnvironment()) {
+        // User cancelled save file dialog
+        return;
+      }
+
+      // Browser fallback
       let bytes: Uint8Array;
       try {
         bytes = await readFileBinary(cleanPath(pdfPath));
@@ -386,7 +407,6 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      const fileName = cleanPath(pdfPath).split(/[/\\]/).pop() || 'document.pdf';
       a.download = fileName;
       document.body.appendChild(a);
       a.click();
@@ -404,19 +424,10 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
     if (!pdfPath) return;
     const cleanPdfPath = cleanPath(pdfPath);
     try {
-      const { openPath } = await import('@tauri-apps/plugin-opener');
-      await openPath(cleanPdfPath);
-    } catch {
-      try {
-        const bytes = await readFileBinary(cleanPdfPath);
-        if (bytes && bytes.length > 0) {
-          const blob = new Blob([bytes], { type: 'application/pdf' });
-          const blobUrl = URL.createObjectURL(blob);
-          window.open(blobUrl, '_blank');
-        }
-      } catch (err) {
-        logger.error('PDF', 'Failed to open PDF externally', { error: formatErrorDetails(err) });
-      }
+      await openInDefaultApp(cleanPdfPath);
+      logger.info('PDF', `Opened PDF in default system application: ${cleanPdfPath}`);
+    } catch (err) {
+      logger.error('PDF', 'Failed to open PDF externally', { error: formatErrorDetails(err) });
     }
   };
 

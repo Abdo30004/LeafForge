@@ -1,8 +1,8 @@
 use crate::error::{AppError, Result};
 use crate::services::github_auth::GithubAuthService;
 use git2::{
-    Cred, DiffFormat, DiffOptions, FetchOptions, IndexAddOption, MergeOptions, PushOptions,
-    RemoteCallbacks, Repository, Signature, StatusOptions, build::RepoBuilder,
+    Cred, DiffFormat, DiffOptions, FetchOptions, MergeOptions, PushOptions, RemoteCallbacks,
+    Repository, Signature, StatusOptions, build::RepoBuilder,
 };
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -25,6 +25,17 @@ pub struct GitRepoStatus {
     pub behind: usize,
     pub staged: Vec<GitFileStatus>,
     pub unstaged: Vec<GitFileStatus>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCommitInfo {
+    pub hash: String,
+    pub short_hash: String,
+    pub message: String,
+    pub author_name: String,
+    pub author_email: String,
+    pub timestamp: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,6 +92,49 @@ impl GitEngine {
         Ok(())
     }
 
+    /// Checks whether a relative path represents internal LeafForge compiler metadata
+    /// or auxiliary files that should never be tracked in git.
+    pub fn is_ignored_path(path: &str) -> bool {
+        let norm = path.replace('\\', "/");
+        let name = norm.rsplit('/').next().unwrap_or(&norm);
+
+        if norm.starts_with(".leafforge/")
+            || norm == ".leafforge"
+            || norm.starts_with(".leafforge-cache/")
+            || norm == ".leafforge-cache"
+            || norm.starts_with(".texflow/")
+            || norm == ".texflow"
+            || name == "leafforge.log"
+        {
+            return true;
+        }
+
+        let aux_exts = [
+            "aux",
+            "log",
+            "synctex.gz",
+            "synctex",
+            "fls",
+            "fdb_latexmk",
+            "out",
+            "toc",
+            "lof",
+            "lot",
+            "bbl",
+            "blg",
+            "nav",
+            "snm",
+            "vrb",
+        ];
+        for ext in aux_exts {
+            if name.ends_with(&format!(".{ext}")) {
+                return true;
+            }
+        }
+
+        false
+    }
+
     /// Initialize a new Git repository with main branch
     pub fn init(path: &Path) -> Result<Repository> {
         let clean = crate::services::clean_path(path);
@@ -89,6 +143,17 @@ impl GitEngine {
         // Set default branch name to main if possible
         let _ = repo.set_head("refs/heads/main");
         Ok(repo)
+    }
+
+    /// Ensures a default .gitignore exists to prevent internal artifacts from being tracked
+    pub fn ensure_gitignore(path: &Path) -> Result<()> {
+        let clean = crate::services::clean_path(path);
+        let gitignore_path = clean.join(".gitignore");
+        if !gitignore_path.exists() {
+            let default_gitignore = "# LeafForge compiler artifacts & metadata\n.leafforge/\n.leafforge-cache/\n.texflow/\nleafforge.log\n*.log\n*.aux\n*.synctex.gz\n*.synctex\n*.fls\n*.fdb_latexmk\n*.out\n";
+            let _ = std::fs::write(&gitignore_path, default_gitignore);
+        }
+        Ok(())
     }
 
     /// Configure authenticated RemoteCallbacks using keyring OAuth token
@@ -177,6 +242,9 @@ impl GitEngine {
 
         for entry in statuses.iter() {
             let file_path = entry.path().unwrap_or("").replace('\\', "/");
+            if Self::is_ignored_path(&file_path) {
+                continue;
+            }
             let s = entry.status();
 
             // Index / Staged changes
@@ -249,6 +317,9 @@ impl GitEngine {
 
     /// Stage a single file
     pub fn stage_file(path: &Path, file_path: &str) -> Result<()> {
+        if Self::is_ignored_path(file_path) {
+            return Ok(());
+        }
         let repo = Self::open(path)?;
         let mut index = repo
             .index()
@@ -278,9 +349,28 @@ impl GitEngine {
         let mut index = repo
             .index()
             .map_err(|e| AppError::Git(format!("Failed to open index: {e}")))?;
-        index
-            .add_all(["*"].iter(), IndexAddOption::DEFAULT, None)
-            .map_err(|e| AppError::Git(format!("Failed to stage all: {e}")))?;
+
+        let mut opts = StatusOptions::new();
+        opts.include_untracked(true).recurse_untracked_dirs(true);
+
+        let statuses = repo
+            .statuses(Some(&mut opts))
+            .map_err(|e| AppError::Git(format!("Failed to retrieve git status: {e}")))?;
+
+        for entry in statuses.iter() {
+            let p = entry.path().unwrap_or("");
+            if Self::is_ignored_path(p) {
+                let _ = index.remove_path(Path::new(p));
+                continue;
+            }
+            let s = entry.status();
+            if s.contains(git2::Status::WT_DELETED) {
+                let _ = index.remove_path(Path::new(p));
+            } else {
+                let _ = index.add_path(Path::new(p));
+            }
+        }
+
         index
             .write()
             .map_err(|e| AppError::Git(format!("Failed to write index: {e}")))?;
@@ -582,6 +672,67 @@ impl GitEngine {
             Ok(remote) => Ok(remote.url().map(String::from)),
             Err(_) => Ok(None),
         }
+    }
+
+    /// Remove a remote from the repository (e.g. disconnect from GitHub)
+    pub fn remove_remote(path: &Path, remote_name: Option<&str>) -> Result<()> {
+        let clean = crate::services::clean_path(path);
+        let repo = Self::open(&clean)?;
+        let r_name = remote_name.unwrap_or("origin");
+        if repo.find_remote(r_name).is_ok() {
+            repo.remote_delete(r_name)
+                .map_err(|e| AppError::Git(format!("Failed to delete remote {r_name}: {e}")))?;
+        }
+        Ok(())
+    }
+
+    /// Retrieve commit history (newest first)
+    pub fn get_log(path: &Path, limit: Option<usize>) -> Result<Vec<GitCommitInfo>> {
+        let clean = crate::services::clean_path(path);
+        if !Self::is_repo(&clean) {
+            return Ok(Vec::new());
+        }
+        let repo = match Self::open(&clean) {
+            Ok(r) => r,
+            Err(_) => return Ok(Vec::new()),
+        };
+        let mut revwalk = match repo.revwalk() {
+            Ok(rw) => rw,
+            Err(_) => return Ok(Vec::new()),
+        };
+        let _ = revwalk.set_sorting(git2::Sort::TIME);
+        if revwalk.push_head().is_err() {
+            return Ok(Vec::new());
+        }
+
+        let max = limit.unwrap_or(30);
+        let mut commits = Vec::new();
+        for oid_res in revwalk.take(max) {
+            if let Ok(oid) = oid_res
+                && let Ok(commit) = repo.find_commit(oid)
+            {
+                let hash = oid.to_string();
+                let short_hash = if hash.len() >= 7 {
+                    hash[..7].to_string()
+                } else {
+                    hash.clone()
+                };
+                let message = commit.message().unwrap_or("").trim().to_string();
+                let author = commit.author();
+                let author_name = author.name().unwrap_or("").to_string();
+                let author_email = author.email().unwrap_or("").to_string();
+                let timestamp = commit.time().seconds();
+                commits.push(GitCommitInfo {
+                    hash,
+                    short_hash,
+                    message,
+                    author_name,
+                    author_email,
+                    timestamp,
+                });
+            }
+        }
+        Ok(commits)
     }
 
     /// 3-Way CRDT-to-Git Reconciliation Algorithm (Subsystem B.3)

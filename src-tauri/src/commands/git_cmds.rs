@@ -1,5 +1,7 @@
 use crate::error::{AppError, Result};
-use crate::services::git_engine::{GitEngine, GitRepoStatus, PullResult, ReconcileResult};
+use crate::services::git_engine::{
+    GitCommitInfo, GitEngine, GitRepoStatus, PullResult, ReconcileResult,
+};
 use crate::state::AppState;
 use std::path::PathBuf;
 use tauri::State;
@@ -283,6 +285,26 @@ pub async fn git_set_remote(
     tokio::task::spawn_blocking(move || {
         let path = PathBuf::from(&project_dir);
         GitEngine::set_remote(&path, remote_name.as_deref(), &url)
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Spawn blocking failed: {e}")))?
+}
+
+#[tauri::command]
+pub async fn git_remove_remote(project_dir: String, remote_name: Option<String>) -> Result<()> {
+    tokio::task::spawn_blocking(move || {
+        let path = PathBuf::from(&project_dir);
+        GitEngine::remove_remote(&path, remote_name.as_deref())
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Spawn blocking failed: {e}")))?
+}
+
+#[tauri::command]
+pub async fn git_log(project_dir: String, limit: Option<usize>) -> Result<Vec<GitCommitInfo>> {
+    tokio::task::spawn_blocking(move || {
+        let path = PathBuf::from(&project_dir);
+        GitEngine::get_log(&path, limit)
     })
     .await
     .map_err(|e| AppError::Internal(format!("Spawn blocking failed: {e}")))?

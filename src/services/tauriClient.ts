@@ -4,6 +4,7 @@ import type { FileEntry, FsChangeEvent, LogEntry, LogLevel } from '../types/ipc'
 import type {
   AuthStatusResponse,
   CollaboratorPermission,
+  GitCommitInfo,
   GithubDeviceCode,
   GithubRepoSummary,
   GithubUserProfile,
@@ -12,6 +13,7 @@ import type {
   PullResult,
   ReconcileResult,
 } from '../types/git';
+import type { ProjectSettings, GlobalSettings } from '../types/settings';
 import type {
   CompilationResult,
   EngineInfo,
@@ -110,11 +112,73 @@ export async function openExternalPath(targetPath: string): Promise<void> {
   if (!isTauriEnvironment()) return;
   const cleaned = cleanPath(targetPath);
   try {
-    const { openPath } = await import('@tauri-apps/plugin-opener');
-    await openPath(cleaned);
+    await invoke<void>('open_in_default_app', { path: cleaned });
+    return;
   } catch {
-    // ignore
+    try {
+      const { openPath } = await import('@tauri-apps/plugin-opener');
+      await openPath(cleaned);
+    } catch {
+      // ignore
+    }
   }
+}
+
+export async function openInDefaultApp(targetPath: string): Promise<void> {
+  return openExternalPath(targetPath);
+}
+
+export async function savePdfAs(
+  sourcePdfPath: string,
+  defaultFileName?: string
+): Promise<string | null> {
+  if (!isTauriEnvironment()) return null;
+  return invoke<string | null>('save_pdf_as', {
+    sourcePdfPath: cleanPath(sourcePdfPath),
+    defaultFileName,
+  });
+}
+
+export async function pickAndImportAssets(targetDir: string): Promise<string[]> {
+  if (!isTauriEnvironment()) return [];
+  return invoke<string[]>('pick_and_import_assets', {
+    targetDir: cleanPath(targetDir),
+  });
+}
+
+export async function getProjectSettings(projectDir: string): Promise<ProjectSettings> {
+  if (!isTauriEnvironment()) return {};
+  return invoke<ProjectSettings>('get_project_settings', {
+    projectDir: cleanPath(projectDir),
+  });
+}
+
+export async function saveProjectSettings(
+  projectDir: string,
+  settings: ProjectSettings
+): Promise<ProjectSettings> {
+  if (!isTauriEnvironment()) return settings;
+  return invoke<ProjectSettings>('save_project_settings', {
+    projectDir: cleanPath(projectDir),
+    settings,
+  });
+}
+
+export async function getGlobalSettings(): Promise<GlobalSettings> {
+  if (!isTauriEnvironment()) {
+    return {
+      theme: 'dark',
+      defaultEngine: 'tectonic',
+      fontSize: 14,
+      autoCompileDelayMs: 1000,
+    };
+  }
+  return invoke<GlobalSettings>('get_global_settings');
+}
+
+export async function saveGlobalSettings(settings: GlobalSettings): Promise<GlobalSettings> {
+  if (!isTauriEnvironment()) return settings;
+  return invoke<GlobalSettings>('save_global_settings', { settings });
 }
 
 export async function importBinaryAsset(targetDir: string, sourcePath: string): Promise<string> {
@@ -644,6 +708,22 @@ export async function gitGetRemoteUrl(
     return null;
   }
   return invoke<string | null>('git_get_remote_url', { projectDir, remoteName });
+}
+
+export async function gitRemoveRemote(
+  projectDir: string,
+  remoteName?: string
+): Promise<void> {
+  if (!isTauriEnvironment()) return;
+  return invoke<void>('git_remove_remote', { projectDir, remoteName });
+}
+
+export async function gitLog(
+  projectDir: string,
+  limit?: number
+): Promise<GitCommitInfo[]> {
+  if (!isTauriEnvironment()) return [];
+  return invoke<GitCommitInfo[]>('git_log', { projectDir, limit });
 }
 
 export function parseGithubOwnerRepo(url: string): { owner: string; repo: string } | null {
