@@ -13,25 +13,56 @@ import {
   Globe,
   LogOut,
   Radio,
+  GitMerge,
+  UploadCloud,
+  CheckCircle2,
 } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { useCollabStore } from '../../store/useCollabStore';
 import { collabManager } from '../../services/collabManager';
+import { gitCrdtBridge } from '../../services/gitCrdtBridge';
+import { readFileText } from '../../services/tauriClient';
+import type { RoomConnectionStatus, PeerUser } from '../../types/collab';
 
-export const CollabPanel: React.FC = () => {
+export interface CollabPanelProps {
+  statusOverride?: RoomConnectionStatus;
+  roomIdOverride?: string;
+  peersOverride?: PeerUser[];
+  isCommitterOverride?: boolean;
+}
+
+export const CollabPanel: React.FC<CollabPanelProps> = ({
+  statusOverride,
+  roomIdOverride,
+  peersOverride,
+  isCommitterOverride,
+}) => {
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
+  const activeFilePath = useWorkspaceStore((s) => s.activeFilePath);
 
-  const status = useCollabStore((s) => s.status);
-  const roomId = useCollabStore((s) => s.roomId);
-  const peers = useCollabStore((s) => s.peers);
+  const storeStatus = useCollabStore((s) => s.status);
+  const storeRoomId = useCollabStore((s) => s.roomId);
+  const storePeers = useCollabStore((s) => s.peers);
+  const storeIsCommitter = useCollabStore((s) => s.isCommitter);
+
+  const status = statusOverride ?? storeStatus;
+  const roomId = roomIdOverride ?? storeRoomId;
+  const peers = peersOverride ?? storePeers;
+  const isCommitter = isCommitterOverride ?? storeIsCommitter;
+
   const designatedCommitterId = useCollabStore((s) => s.designatedCommitterId);
   const followingPeerId = useCollabStore((s) => s.followingPeerId);
+  const userPermission = useCollabStore((s) => s.userPermission);
+  const canWrite = useCollabStore((s) => s.canWrite);
   const toggleFollowPeer = useCollabStore((s) => s.toggleFollowPeer);
 
   const [customRoomInput, setCustomRoomInput] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [reconciling, setReconciling] = useState(false);
+  const [reconcileSuccess, setReconcileSuccess] = useState<string | null>(null);
+  const [pushing, setPushing] = useState(false);
 
   const handleConnect = async () => {
     if (!workspacePath) {
@@ -64,6 +95,56 @@ export const CollabPanel: React.FC = () => {
       console.error('Clipboard copy error:', e);
     }
   };
+
+  const handleReconcileWithGit = async () => {
+    if (!activeFilePath) {
+      setErrorMsg('Open a file first to reconcile.');
+      return;
+    }
+    setReconciling(true);
+    setReconcileSuccess(null);
+    setErrorMsg(null);
+    try {
+      // Read current disk/remote content
+      const diskContent = await readFileText(activeFilePath);
+      const outcome = await gitCrdtBridge.reconcileFile(
+        activeFilePath,
+        diskContent,
+        workspacePath ?? undefined
+      );
+
+      if (outcome.status === 'clean' || outcome.status === 'up-to-date') {
+        setReconcileSuccess('Session cleanly synchronized with Git!');
+        setTimeout(() => setReconcileSuccess(null), 3000);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMsg(`Reconciliation failed: ${msg}`);
+    } finally {
+      setReconciling(false);
+    }
+  };
+
+  const handleDesignatedCommitterPush = async () => {
+    if (!workspacePath) return;
+    setPushing(true);
+    setErrorMsg(null);
+    try {
+      await gitCrdtBridge.designatedCommitterPush(
+        workspacePath,
+        `chore(collab): sync live collaborative session changes`
+      );
+      setReconcileSuccess('Committed and pushed to GitHub as Designated Committer!');
+      setTimeout(() => setReconcileSuccess(null), 3000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMsg(`Push failed: ${msg}`);
+    } finally {
+      setPushing(false);
+    }
+  };
+
+  const followedPeer = peers.find((p) => p.clientId === followingPeerId);
 
   return (
     <div className="flex flex-col h-full overflow-hidden select-none text-[13px]">
@@ -117,7 +198,7 @@ export const CollabPanel: React.FC = () => {
             </div>
 
             {errorMsg && (
-              <div className="p-2.5 rounded bg-rose-500/10 border border-rose-500/20 text-xs text-rose-400">
+              <div className="p-2.5 rounded bg-rose-500/10 border border-rose-500/20 text-xs text-rose-400 leading-relaxed">
                 {errorMsg}
               </div>
             )}
@@ -176,7 +257,7 @@ export const CollabPanel: React.FC = () => {
                 </span>
                 <button
                   onClick={handleCopyRoomId}
-                  className="p-1 rounded hover:bg-[var(--hover-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                  className="p-1 rounded hover:bg-[var(--hover-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
                   title="Copy Room ID"
                 >
                   {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -185,9 +266,105 @@ export const CollabPanel: React.FC = () => {
 
               <div className="text-[10px] text-[var(--text-muted)] flex items-center justify-between pt-1">
                 <span>Relay: signaling.yjs.dev</span>
-                <span>Crash cache: IndexedDB</span>
+                <span className="capitalize">
+                  Role: <strong className="text-[var(--text-primary)]">{userPermission ?? 'write'}</strong>
+                  {!canWrite && <span className="text-amber-400 ml-1">(Read-Only)</span>}
+                </span>
               </div>
             </div>
+
+            {/* Designated Committer Banner */}
+            {isCommitter ? (
+              <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs space-y-1.5">
+                <div className="flex items-center space-x-1.5 text-amber-400 font-semibold">
+                  <Crown className="w-3.5 h-3.5 fill-current" />
+                  <span>You are Designated Committer</span>
+                </div>
+                <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                  You are the elected leader for Git pushes. Your client coordinates version control to avoid collisions.
+                </p>
+                <button
+                  onClick={handleDesignatedCommitterPush}
+                  disabled={pushing}
+                  className="w-full mt-1 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded text-[11px] transition-colors flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {pushing ? (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <span>Pushing to GitHub...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud className="w-3 h-3" />
+                      <span>Push Live Changes to GitHub</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            ) : (
+              designatedCommitterId && (
+                <div className="p-2 rounded-lg bg-[var(--canvas)] border border-[var(--border-subtle)] text-[11px] flex items-center space-x-1.5 text-[var(--text-muted)]">
+                  <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span>
+                    Committer leader:{' '}
+                    <strong className="text-[var(--text-primary)]">
+                      {peers.find((p) => p.clientId === designatedCommitterId)?.username ||
+                        `Client #${designatedCommitterId}`}
+                    </strong>
+                  </span>
+                </div>
+              )
+            )}
+
+            {/* Following Peer Banner */}
+            {followedPeer && (
+              <div className="p-2 rounded-lg bg-accent-primary/10 border border-accent-primary/20 text-xs flex items-center justify-between">
+                <div className="flex items-center space-x-1.5 text-accent-primary truncate">
+                  <Eye className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Following @{followedPeer.username}</span>
+                </div>
+                <button
+                  onClick={() => toggleFollowPeer(followedPeer.clientId)}
+                  className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] font-medium cursor-pointer"
+                >
+                  Unfollow
+                </button>
+              </div>
+            )}
+
+            {/* Reconcile Status Notifications */}
+            {reconcileSuccess && (
+              <div className="p-2 rounded bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400 flex items-center space-x-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                <span>{reconcileSuccess}</span>
+              </div>
+            )}
+
+            {errorMsg && (
+              <div className="p-2.5 rounded bg-rose-500/10 border border-rose-500/20 text-xs text-rose-400 leading-relaxed">
+                {errorMsg}
+              </div>
+            )}
+
+            {/* 3-Way Reconcile Button */}
+            <button
+              onClick={handleReconcileWithGit}
+              disabled={reconciling || !activeFilePath}
+              className="w-full py-1.5 rounded-lg bg-[var(--canvas)] hover:bg-[var(--hover-bg)] border border-[var(--border-subtle)] text-xs font-medium text-[var(--text-primary)] transition-colors flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-40"
+              title="Reconcile live CRDT document with Git disk / remote commits"
+            >
+              {reconciling ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-accent-primary" />
+                  <span>Reconciling...</span>
+                </>
+              ) : (
+                <>
+                  <GitMerge className="w-3.5 h-3.5 text-accent-primary" />
+                  <span>Reconcile with Git (3-Way)</span>
+                </>
+              )}
+            </button>
 
             {/* Active Peers List */}
             <div className="space-y-2">
@@ -229,6 +406,11 @@ export const CollabPanel: React.FC = () => {
                                 <Crown className="w-3 h-3 fill-current" />
                               </span>
                             )}
+                            {peer.canWrite === false && (
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-zinc-800 text-zinc-400 font-mono">
+                                Read
+                              </span>
+                            )}
                           </div>
                           {peer.activeFile && (
                             <p className="text-[10px] text-[var(--text-muted)] truncate font-mono">
@@ -241,7 +423,7 @@ export const CollabPanel: React.FC = () => {
                       {/* Follow peer button */}
                       <button
                         onClick={() => toggleFollowPeer(peer.clientId)}
-                        className={`p-1.5 rounded transition-colors ${
+                        className={`p-1.5 rounded transition-colors cursor-pointer ${
                           isFollowing
                             ? 'bg-accent-primary text-black'
                             : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--hover-bg)]'
@@ -260,7 +442,7 @@ export const CollabPanel: React.FC = () => {
             <div className="pt-2 border-t border-[var(--border-subtle)]">
               <button
                 onClick={handleDisconnect}
-                className="w-full py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-md text-xs font-medium transition-colors flex items-center justify-center space-x-1.5"
+                className="w-full py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-md text-xs font-medium transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span>Leave Session</span>

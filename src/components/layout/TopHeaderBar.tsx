@@ -7,10 +7,13 @@ import {
   Moon,
   FolderOpen,
   Sparkles,
+  Crown,
 } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { useCompilerStore } from '../../store/useCompilerStore';
 import { useGitStore } from '../../store/useGitStore';
+import { useCollabStore } from '../../store/useCollabStore';
+import type { PeerUser } from '../../types/collab';
 import {
   openFolder,
   listFiles,
@@ -18,7 +21,15 @@ import {
   getGithubAuthStatus,
 } from '../../services/tauriClient';
 
-export const TopHeaderBar: React.FC = () => {
+export interface TopHeaderBarProps {
+  peersOverride?: PeerUser[];
+  designatedCommitterIdOverride?: number | null;
+}
+
+export const TopHeaderBar: React.FC<TopHeaderBarProps> = ({
+  peersOverride,
+  designatedCommitterIdOverride,
+}) => {
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
   const activeFilePath = useWorkspaceStore((s) => s.activeFilePath);
   const rootTexFile = useWorkspaceStore((s) => s.rootTexFile);
@@ -39,6 +50,13 @@ export const TopHeaderBar: React.FC = () => {
   const userProfile = useGitStore((s) => s.userProfile);
   const setUserProfile = useGitStore((s) => s.setUserProfile);
   const setDeviceModalOpen = useGitStore((s) => s.setDeviceModalOpen);
+
+  const storePeers = useCollabStore((s) => s.peers);
+  const storeLeaderId = useCollabStore((s) => s.designatedCommitterId);
+  const peers = peersOverride ?? storePeers;
+  const designatedCommitterId = designatedCommitterIdOverride !== undefined ? designatedCommitterIdOverride : storeLeaderId;
+  const followingPeerId = useCollabStore((s) => s.followingPeerId);
+  const toggleFollowPeer = useCollabStore((s) => s.toggleFollowPeer);
 
   React.useEffect(() => {
     getGithubAuthStatus()
@@ -193,6 +211,49 @@ export const TopHeaderBar: React.FC = () => {
         </button>
 
         <div className="h-4 w-[1px] bg-[var(--border-subtle)]" />
+
+        {/* Collaborator Presence Bar (Subsystem B / Section 6.4) */}
+        {peers.length > 0 && (
+          <>
+            <div className="flex items-center -space-x-1.5 px-0.5">
+              {peers.map((peer) => {
+                const isLeader = peer.clientId === designatedCommitterId;
+                const isFollowing = peer.clientId === followingPeerId;
+
+                return (
+                  <button
+                    key={peer.clientId}
+                    onClick={() => toggleFollowPeer(peer.clientId)}
+                    className={`relative p-0.5 rounded-full transition-all cursor-pointer ${
+                      isFollowing
+                        ? 'ring-2 ring-accent-primary scale-110 z-10'
+                        : 'hover:scale-105 hover:z-10'
+                    }`}
+                    title={`@${peer.username}${isLeader ? ' (Designated Committer)' : ''} - Click to ${
+                      isFollowing ? 'unfollow' : 'follow cursor'
+                    }`}
+                  >
+                    <img
+                      src={peer.avatarUrl}
+                      alt={peer.username}
+                      style={{ borderColor: peer.color }}
+                      className="w-6 h-6 rounded-full border-2 bg-[var(--surface-elevated)]"
+                    />
+                    {isLeader && (
+                      <span
+                        className="absolute -top-1 -right-1 bg-amber-400 text-black rounded-full p-0.5 shadow-xs"
+                        title="Designated Committer"
+                      >
+                        <Crown className="w-2.5 h-2.5 fill-current" />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="h-4 w-[1px] bg-[var(--border-subtle)]" />
+          </>
+        )}
 
         {/* GitHub Account / Sign In */}
         {userProfile ? (

@@ -37,10 +37,14 @@ export async function listFiles(dirPath: string): Promise<FileEntry[]> {
 }
 
 export async function readFileText(path: string): Promise<string> {
+  if (!isTauriEnvironment()) {
+    return '';
+  }
   return invoke<string>('read_file_text', { path });
 }
 
 export async function writeFileText(path: string, content: string): Promise<void> {
+  if (!isTauriEnvironment()) return;
   return invoke<void>('write_file_text', { path, content });
 }
 
