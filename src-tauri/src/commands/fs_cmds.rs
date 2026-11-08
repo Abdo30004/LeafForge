@@ -154,6 +154,16 @@ pub async fn read_file_text(path: String) -> Result<String> {
 }
 
 #[tauri::command]
+pub async fn read_file_binary(path: String) -> Result<Vec<u8>> {
+    let pb = PathBuf::from(&path);
+    if !pb.exists() {
+        return Err(AppError::NotFound(path));
+    }
+
+    tokio::fs::read(&pb).await.map_err(AppError::Io)
+}
+
+#[tauri::command]
 pub async fn write_file_text(path: String, content: String) -> Result<()> {
     let target_path = PathBuf::from(&path);
     let parent = target_path.parent().ok_or_else(|| {

@@ -43,6 +43,14 @@ export async function readFileText(path: string): Promise<string> {
   return invoke<string>('read_file_text', { path });
 }
 
+export async function readFileBinary(path: string): Promise<Uint8Array> {
+  if (!isTauriEnvironment()) {
+    return new Uint8Array();
+  }
+  const bytes = await invoke<number[]>('read_file_binary', { path });
+  return new Uint8Array(bytes);
+}
+
 export async function writeFileText(path: string, content: string): Promise<void> {
   if (!isTauriEnvironment()) return;
   return invoke<void>('write_file_text', { path, content });

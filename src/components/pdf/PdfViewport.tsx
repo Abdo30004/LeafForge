@@ -10,10 +10,12 @@ import {
   ExternalLink,
   RefreshCw,
   FileText,
+  Download,
+  Eye,
 } from 'lucide-react';
 import { useCompilerStore } from '../../store/useCompilerStore';
 import { useWorkspaceStore } from '../../store/useWorkspaceStore';
-import { synctexForward, synctexInverse } from '../../services/tauriClient';
+import { readFileBinary, synctexForward, synctexInverse } from '../../services/tauriClient';
 import { SyncTexOverlay } from './SyncTexOverlay';
 import { formatErrorDetails } from '../../utils/formatError';
 import { logger } from '../../services/logger';
@@ -53,6 +55,8 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
   const pdfPath = useCompilerStore((s) => s.pdfPath);
   const compilerStatus = useCompilerStore((s) => s.status);
   const runCompile = useCompilerStore((s) => s.runCompile);
+  const compileNonce = useCompilerStore((s) => s.compileNonce);
+  const [downloading, setDownloading] = useState<boolean>(false);
 
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
   const rootTexFile = useWorkspaceStore((s) => s.rootTexFile) || 'main.tex';
@@ -208,8 +212,24 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
       }
 
       try {
-        // Load PDF bytes via fetch or tauri URL
-        const loadingTask = pdfjsLib.getDocument({ url: pdfPath });
+        let loadingTask: pdfjsLib.PDFDocumentLoadingTask;
+
+        // Directly read raw binary bytes from disk to prevent URL parsing errors
+        let binaryBytes: Uint8Array | null = null;
+        try {
+          binaryBytes = await readFileBinary(pdfPath);
+        } catch {
+          // Fallback if binary direct read is unavailable
+        }
+
+        if (cancelled) return;
+
+        if (binaryBytes && binaryBytes.length > 0) {
+          loadingTask = pdfjsLib.getDocument({ data: binaryBytes });
+        } else {
+          loadingTask = pdfjsLib.getDocument({ url: pdfPath });
+        }
+
         const doc = await loadingTask.promise;
 
         if (cancelled) return;
@@ -243,7 +263,7 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
     return () => {
       cancelled = true;
     };
-  }, [pdfPath, currentPage, scale]);
+  }, [pdfPath, compileNonce, currentPage, scale]);
 
   // Handle Forward SyncTeX Events (Cmd/Ctrl+Click from Editor)
   useEffect(() => {
@@ -338,6 +358,47 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
     }
   };
 
+  // Save / Download PDF file
+  const handleDownloadPdf = async () => {
+    if (!pdfPath) return;
+    setDownloading(true);
+    try {
+      let bytes: Uint8Array;
+      try {
+        bytes = await readFileBinary(pdfPath);
+      } catch {
+        const resp = await fetch(pdfPath);
+        const buf = await resp.arrayBuffer();
+        bytes = new Uint8Array(buf);
+      }
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const fileName = pdfPath.split(/[/\\]/).pop() || 'document.pdf';
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      logger.error('PDF', 'Failed to download PDF', { error: formatErrorDetails(err) });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  // Open PDF in default system desktop application
+  const handleOpenExternal = async () => {
+    if (!pdfPath) return;
+    try {
+      const { openPath } = await import('@tauri-apps/plugin-opener');
+      await openPath(pdfPath);
+    } catch {
+      window.open(pdfPath, '_blank');
+    }
+  };
+
   return (
     <div
       className={`flex flex-col h-full bg-[var(--canvas)] select-none overflow-hidden ${
@@ -409,7 +470,7 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
           </button>
         </div>
 
-        {/* Compile trigger & Pop-out button */}
+        {/* Actions: Recompile, Download, System Viewer, Pop-out */}
         <div className="flex items-center space-x-1.5">
           <button
             onClick={() => runCompile()}
@@ -421,6 +482,23 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
               className={`w-3.5 h-3.5 ${compilerStatus === 'compiling' ? 'animate-spin text-accent-primary' : ''}`}
             />
           </button>
+          <button
+            onClick={handleDownloadPdf}
+            disabled={!pdfPath || downloading}
+            className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)] disabled:opacity-30"
+            title="Save / Download PDF"
+          >
+            <Download className="w-3.5 h-3.5" />
+          </button>
+          {pdfPath && (
+            <button
+              onClick={handleOpenExternal}
+              className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)]"
+              title="Open in System Default PDF Viewer"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </button>
+          )}
           {!isDetached && (
             <button
               onClick={() => {
@@ -429,7 +507,7 @@ export const PdfViewport: React.FC<PdfViewportProps> = ({ className, isDetached 
               className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)]"
               title="Pop out PDF to separate window"
             >
-              <ExternalLink className="w-3.5 h-3.5" />
+              <Eye className="w-3.5 h-3.5" />
             </button>
           )}
         </div>

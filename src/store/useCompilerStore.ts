@@ -28,6 +28,7 @@ export interface CompilerState {
   systemFonts: SystemFontInfo[];
   fontFamilies: string[];
   activeFontFamily: string;
+  compileNonce: number;
 
   setEngine: (engine: LatexEngine) => void;
   setStatus: (status: CompilerStatus) => void;
@@ -68,6 +69,7 @@ export const useCompilerStore = create<CompilerState>((set, get) => ({
   systemFonts: [],
   fontFamilies: [],
   activeFontFamily: 'Default',
+  compileNonce: 0,
 
   setEngine: (engine) => set({ engine }),
   setStatus: (status) => set({ status }),
@@ -75,18 +77,19 @@ export const useCompilerStore = create<CompilerState>((set, get) => ({
   setSynctexPath: (synctexPath) => set({ synctexPath }),
   setUsePreambleCache: (usePreambleCache) => set({ usePreambleCache }),
   setBuildResult: (durationMs, diagnostics, log, pdfPath, synctexPath) =>
-    set({
+    set((state) => ({
       lastBuildDurationMs: durationMs,
       diagnostics,
       rawLog: log,
-      pdfPath: pdfPath ?? get().pdfPath,
-      synctexPath: synctexPath ?? get().synctexPath,
+      pdfPath: pdfPath ?? state.pdfPath,
+      synctexPath: synctexPath ?? state.synctexPath,
+      compileNonce: state.compileNonce + 1,
       status: diagnostics.some((d) => d.severity === 'error')
         ? 'error'
         : diagnostics.some((d) => d.severity === 'warning')
         ? 'warning'
         : 'success',
-    }),
+    })),
   toggleLogDrawer: () => set((state) => ({ logDrawerOpen: !state.logDrawerOpen })),
   setLogDrawerOpen: (open) => set({ logDrawerOpen: open }),
   setActiveLogTab: (activeLogTab) => set({ activeLogTab }),

@@ -404,6 +404,11 @@ pub async fn execute_compilation(
                 .arg("-interaction=nonstopmode")
                 .arg("-file-line-error");
 
+            // Under MiKTeX, automatically install missing CTAN packages on the fly
+            if bin_path.to_string_lossy().to_lowercase().contains("miktex") {
+                cmd.arg("--enable-installer");
+            }
+
             if config.use_preamble_cache
                 && let Ok(content) = std::fs::read_to_string(&root_path)
                 && let Some(preamble) = extract_preamble(&content)

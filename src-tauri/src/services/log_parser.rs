@@ -165,6 +165,31 @@ pub fn parse_latex_log(
             continue;
         }
 
+        // 3b. Fatal Engine / Module Errors (e.g. luaotfload FATAL ERROR, Emergency stop, Fatal error occurred)
+        if line.contains("FATAL ERROR")
+            || line.contains("Emergency stop")
+            || line.contains("Fatal error occurred")
+            || line.contains("file not found: 'lua-")
+        {
+            let snippet = get_snippet(&lines, i, 4);
+            let clean_msg = if let Some(idx) = line.find("FATAL ERROR") {
+                line[idx..].trim().to_string()
+            } else {
+                line.trim().to_string()
+            };
+
+            diagnostics.push(LatexDiagnostic {
+                file_path: current_file.clone(),
+                line: 1,
+                column: 1,
+                severity: DiagnosticSeverity::Error,
+                message: clean_msg,
+                raw_log_snippet: Some(snippet),
+            });
+            i += 1;
+            continue;
+        }
+
         // 4. Package / LaTeX Warnings
         if let Some(warn_caps) = LATEX_WARNING_REGEX.captures(line) {
             let pkg = warn_caps.get(1).map(|m| m.as_str()).unwrap_or("LaTeX");
