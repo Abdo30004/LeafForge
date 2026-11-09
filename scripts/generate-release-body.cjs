@@ -12,7 +12,7 @@ function generateReleaseBody(tagName) {
 ### Release Assets:
 - **Windows:** \`.msi\` (WiX Installer) & \`.exe\` (NSIS Setup)
 - **macOS:** \`.dmg\` (Apple Silicon & Intel Universal)
-- **Linux:** \`.AppImage\` & \`.deb\`
+- **Linux:** \`.AppImage\`, \`.deb\` & \`.rpm\`
 
 ### Key Features:
 - Dual-Mode CodeMirror 6 BiDi / Visual WYSIWYM Editor
