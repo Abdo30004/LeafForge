@@ -20,7 +20,7 @@ jobs:
           - platform: 'windows-latest'
             args: ''
           - platform: 'macos-latest'
-            args: '--target aarch64-apple-darwin'
+            args: '--target universal-apple-darwin'
           - platform: 'ubuntu-22.04'
             args: ''
 
@@ -43,7 +43,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -64,7 +64,8 @@ jobs:
             libwebkit2gtk-4.1-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
-            libxdo-dev
+            libxdo-dev \
+            rpm
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
@@ -80,6 +81,6 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'LeafForge ${{ github.ref_name }}'
           releaseBody: ${{ env.LEAFFORGE_RELEASE_BODY }}
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
